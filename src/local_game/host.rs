@@ -55,7 +55,8 @@ impl LocalGameHost {
 #[derive(Debug, Clone)]
 struct LocalGameSessionState {
     self_hand_tiles: Vec<String>,
-    self_river_tiles: Vec<String>,
+    player_river_tiles: Vec<Vec<String>>,
+    opponent_discard_tiles: Vec<String>,
     dora_indicator: String,
     remaining_tiles: u32,
     turn_index: u32,
@@ -69,11 +70,13 @@ impl LocalGameSessionState {
         wall.rotate_left(offset);
 
         let self_hand_tiles = wall.iter().take(14).cloned().collect();
+        let opponent_discard_tiles = wall.iter().skip(14).take(72).cloned().collect();
         let dora_indicator = wall.get(53).cloned().unwrap_or_else(|| "5m".into());
 
         Self {
             self_hand_tiles,
-            self_river_tiles: vec![],
+            player_river_tiles: vec![vec![], vec![], vec![], vec![]],
+            opponent_discard_tiles,
             dora_indicator,
             remaining_tiles: 70,
             turn_index: 0,
@@ -90,12 +93,12 @@ impl LocalGameSessionState {
             phase_label: if self.turn_index == 0 {
                 "Initial local hand".into()
             } else {
-                "Local action submitted".into()
+                "Waiting for your action".into()
             },
             notice: if self.turn_index == 0 {
                 "Local game session view. Submit a discard to update this session.".into()
             } else {
-                "Local discard accepted. AI auto-advance is not wired yet.".into()
+                "Deterministic AI auto-advance completed. CoachWorker is not wired yet.".into()
             },
             round: LocalGameRoundView {
                 round_label: "E1".into(),
@@ -104,7 +107,7 @@ impl LocalGameSessionState {
                 remaining_tiles: self.remaining_tiles,
                 dealer_seat: 0,
             },
-            players: player_views(&self.self_river_tiles),
+            players: player_views(&self.player_river_tiles),
             self_hand_tiles: self.self_hand_tiles.clone(),
             dora_indicators: vec![self.dora_indicator.clone()],
             actions,
@@ -137,10 +140,22 @@ impl LocalGameSessionState {
         }
 
         let tile = self.self_hand_tiles.remove(index);
-        self.self_river_tiles.push(tile);
+        self.player_river_tiles[0].push(tile);
         self.remaining_tiles = self.remaining_tiles.saturating_sub(1);
+        self.auto_advance_opponents();
         self.turn_index += 1;
         Ok(())
+    }
+
+    fn auto_advance_opponents(&mut self) {
+        for seat in 1..=3 {
+            let tile = self
+                .opponent_discard_tiles
+                .pop()
+                .unwrap_or_else(|| fallback_opponent_tile(seat, self.turn_index));
+            self.player_river_tiles[seat].push(tile);
+            self.remaining_tiles = self.remaining_tiles.saturating_sub(1);
+        }
     }
 
     fn discard_actions(&self) -> Vec<LocalGameActionView> {
@@ -160,21 +175,25 @@ impl LocalGameSessionState {
     }
 }
 
-fn player_views(self_river_tiles: &[String]) -> Vec<LocalGamePlayerView> {
+fn player_views(player_river_tiles: &[Vec<String>]) -> Vec<LocalGamePlayerView> {
     (0..4)
         .map(|seat| LocalGamePlayerView {
             seat,
             relation_label: RELATION_LABELS[seat as usize].into(),
             wind: WINDS[seat as usize].into(),
             score: 25000,
-            river_tiles: if seat == 0 {
-                self_river_tiles.to_vec()
-            } else {
-                vec![]
-            },
+            river_tiles: player_river_tiles
+                .get(seat as usize)
+                .cloned()
+                .unwrap_or_default(),
             melds: vec![],
             status_tags: if seat == 0 {
                 vec!["thinking".into()]
+            } else if player_river_tiles
+                .get(seat as usize)
+                .is_some_and(|river| !river.is_empty())
+            {
+                vec!["auto-advanced".into()]
             } else {
                 vec![]
             },
@@ -182,6 +201,12 @@ fn player_views(self_river_tiles: &[String]) -> Vec<LocalGamePlayerView> {
             is_self: seat == 0,
         })
         .collect()
+}
+
+fn fallback_opponent_tile(seat: usize, turn_index: u32) -> String {
+    const FALLBACK_TILES: [&str; 9] = ["1p", "2p", "3p", "4s", "5s", "6s", "E", "S", "W"];
+    let index = (seat + turn_index as usize) % FALLBACK_TILES.len();
+    FALLBACK_TILES[index].into()
 }
 
 fn recommendation_from_first_action(
@@ -254,6 +279,22 @@ mod tests {
             .len()
     }
 
+    fn river_len(view: &LocalGameView, seat: u8) -> usize {
+        view.players
+            .iter()
+            .find(|player| player.seat == seat)
+            .unwrap()
+            .river_tiles
+            .len()
+    }
+
+    fn total_river_len(view: &LocalGameView) -> usize {
+        view.players
+            .iter()
+            .map(|player| player.river_tiles.len())
+            .sum()
+    }
+
     #[test]
     fn local_game_host_builds_non_fixture_initial_view() {
         let session = LocalGameHost::new(1).start_session("local-test".into());
@@ -283,7 +324,36 @@ mod tests {
         let self_player = after.players.iter().find(|player| player.is_self).unwrap();
         assert_eq!(self_player.river_tiles, vec![discarded]);
         assert_eq!(after.actions.len(), before.actions.len() - 1);
-        assert_eq!(after.phase_label, "Local action submitted");
+        assert_eq!(after.phase_label, "Waiting for your action");
+        assert!(after.notice.contains("auto-advance completed"));
+    }
+
+    #[test]
+    fn submit_auto_advances_each_opponent_river() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+        let before = session.view();
+
+        let after = session.submit_action(before.actions[0].id).unwrap();
+
+        assert_eq!(river_len(&after, 0), river_len(&before, 0) + 1);
+        assert_eq!(river_len(&after, 1), river_len(&before, 1) + 1);
+        assert_eq!(river_len(&after, 2), river_len(&before, 2) + 1);
+        assert_eq!(river_len(&after, 3), river_len(&before, 3) + 1);
+        assert_eq!(total_river_len(&after), total_river_len(&before) + 4);
+    }
+
+    #[test]
+    fn submit_auto_advance_decrements_remaining_tiles_by_four() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+        let before = session.view();
+
+        let after = session.submit_action(before.actions[0].id).unwrap();
+
+        assert_eq!(
+            after.round.remaining_tiles,
+            before.round.remaining_tiles - 4
+        );
+        assert!(after.actions.iter().any(|action| action.enabled));
     }
 
     #[test]
@@ -297,6 +367,16 @@ mod tests {
     }
 
     #[test]
+    fn submit_unknown_action_does_not_auto_advance() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+        let before = session.view();
+
+        assert!(session.submit_action(999).is_err());
+
+        assert_eq!(total_river_len(&session.view()), total_river_len(&before));
+    }
+
+    #[test]
     fn submit_disabled_action_preserves_view() {
         let mut session = LocalGameHost::new(1).start_session("local-test".into());
         session.state.actions_enabled = false;
@@ -306,6 +386,7 @@ mod tests {
 
         assert!(error.contains("disabled"));
         assert_eq!(session.view(), before);
+        assert_eq!(total_river_len(&session.view()), total_river_len(&before));
     }
 
     #[test]

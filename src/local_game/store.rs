@@ -119,6 +119,16 @@ mod tests {
                 .len(),
             1
         );
+        assert!(after.actions.iter().any(|action| action.enabled));
+        assert_eq!(
+            after.round.remaining_tiles,
+            before.round.remaining_tiles - 4
+        );
+        assert!(after
+            .players
+            .iter()
+            .filter(|player| !player.is_self)
+            .all(|player| player.river_tiles.len() == 1));
     }
 
     #[test]
