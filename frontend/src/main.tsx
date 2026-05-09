@@ -12,6 +12,7 @@ import { History } from '@/routes/History'
 import { Logs } from '@/routes/Logs'
 import { Settings } from '@/routes/Settings'
 import { Setup } from '@/routes/Setup'
+import { LocalTable } from '@/routes/LocalTable'
 import { HAS_TAURI, invoke } from '@/lib/tauri'
 import type { AppConfig } from '@/types'
 
@@ -39,6 +40,7 @@ const router = createHashRouter([
     children: [
       { index: true, element: <Overview /> },
       { path: 'game', element: <GameDashboard /> },
+      { path: 'local-table', element: <LocalTable /> },
       { path: 'bots', element: <Bots /> },
       { path: 'history', element: <History /> },
       { path: 'logs', element: <Logs /> },

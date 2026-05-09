@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ScrollText,
   Settings as SettingsIcon,
+  Table2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -38,6 +39,7 @@ export function getMenuList(t: Translate): MenuGroup[] {
       menus: [
         { href: '/', label: t('nav.overview'), icon: LayoutDashboard },
         { href: '/game', label: t('nav.game'), icon: Gamepad2 },
+        { href: '/local-table', label: t('nav.local_table'), icon: Table2 },
         { href: '/bots', label: t('nav.bots'), icon: Bot },
         { href: '/history', label: t('nav.history'), icon: HistoryIcon },
         { href: '/logs', label: t('nav.logs'), icon: ScrollText },
