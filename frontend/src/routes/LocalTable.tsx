@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Mahgen } from '@/components/Mahgen'
 import {
   loadLocalGameView,
+  submitLocalGameAction,
   type LocalGameActionView,
   type LocalGameLoadResult,
   type LocalGamePlayerView,
@@ -17,6 +18,8 @@ export function LocalTable() {
   const { t } = useTranslation()
   const [loadResult, setLoadResult] = useState<LocalGameLoadResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [submittingActionId, setSubmittingActionId] = useState<number | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -48,6 +51,27 @@ export function LocalTable() {
   const { view } = loadResult
   const self = view.players.find((player) => player.isSelf)
   const opponents = view.players.filter((player) => !player.isSelf)
+  const canSubmitAction = loadResult.mode === 'tauri' && loadResult.gameId.length > 0
+
+  async function handleSubmitAction(actionId: number) {
+    if (!canSubmitAction || !loadResult) return
+    const current: LocalGameLoadResult = loadResult
+    setSubmittingActionId(actionId)
+    setSubmitError(null)
+    try {
+      const nextView = await submitLocalGameAction(current.gameId, actionId)
+      setLoadResult({
+        gameId: current.gameId,
+        view: nextView,
+        mode: current.mode,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setSubmitError(message)
+    } finally {
+      setSubmittingActionId(null)
+    }
+  }
 
   return (
     <div className="min-h-full bg-background p-4 lg:p-6">
@@ -66,6 +90,7 @@ export function LocalTable() {
           {loadResult.error && (
             <p className="mt-1 max-w-3xl text-xs text-destructive">{loadResult.error}</p>
           )}
+          {submitError && <p className="mt-1 max-w-3xl text-xs text-destructive">{submitError}</p>}
         </div>
         <RoundSummary view={view} />
       </div>
@@ -101,7 +126,12 @@ export function LocalTable() {
         </section>
 
         <aside className="grid content-start gap-4">
-          <ActionPanel actions={view.actions} />
+          <ActionPanel
+            actions={view.actions}
+            canSubmit={canSubmitAction}
+            submittingActionId={submittingActionId}
+            onSubmitAction={handleSubmitAction}
+          />
           <RecommendationPanel recommendations={view.recommendations} />
         </aside>
       </div>
@@ -179,7 +209,17 @@ function SelfHandPanel({ selfHandTiles }: { selfHandTiles: string[] }) {
   )
 }
 
-function ActionPanel({ actions }: { actions: LocalGameActionView[] }) {
+function ActionPanel({
+  actions,
+  canSubmit,
+  submittingActionId,
+  onSubmitAction,
+}: {
+  actions: LocalGameActionView[]
+  canSubmit: boolean
+  submittingActionId: number | null
+  onSubmitAction: (actionId: number) => void
+}) {
   const { t } = useTranslation()
   return (
     <Card className="py-0">
@@ -188,9 +228,17 @@ function ActionPanel({ actions }: { actions: LocalGameActionView[] }) {
       </CardHeader>
       <CardContent className="grid gap-2 p-3">
         {actions.map((action) => (
-          <Button key={action.id} variant="outline" disabled={!action.enabled} className="justify-start">
+          <Button
+            key={action.id}
+            variant="outline"
+            disabled={!canSubmit || !action.enabled || submittingActionId !== null}
+            className="justify-start"
+            onClick={() => onSubmitAction(action.id)}
+          >
             <span>{action.label}</span>
-            <span className="ml-auto text-xs text-muted-foreground">{action.hint}</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {submittingActionId === action.id ? t('local_table.submitting_action') : action.hint}
+            </span>
           </Button>
         ))}
       </CardContent>

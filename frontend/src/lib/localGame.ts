@@ -176,3 +176,7 @@ export async function loadLocalGameView(): Promise<LocalGameLoadResult> {
 export async function getLocalGameView(gameId: string): Promise<LocalGameView> {
   return await invoke<LocalGameView>('local_game_get_view', { gameId })
 }
+
+export async function submitLocalGameAction(gameId: string, actionId: number): Promise<LocalGameView> {
+  return await invoke<LocalGameView>('local_game_submit_action', { gameId, actionId })
+}

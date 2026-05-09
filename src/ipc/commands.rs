@@ -83,6 +83,14 @@ async fn read_local_game_view(
     store.lock().await.get_view(&game_id)
 }
 
+async fn submit_local_game_action(
+    store: &Arc<Mutex<LocalGameSessionStore>>,
+    game_id: String,
+    action_id: u32,
+) -> CmdResult<LocalGameView> {
+    store.lock().await.submit_action(&game_id, action_id)
+}
+
 #[tauri::command]
 pub async fn local_game_new(state: State<'_, AppState>) -> CmdResult<LocalGameSessionHandle> {
     create_local_game_session(&state.local_game_sessions).await
@@ -94,6 +102,15 @@ pub async fn local_game_get_view(
     state: State<'_, AppState>,
 ) -> CmdResult<LocalGameView> {
     read_local_game_view(&state.local_game_sessions, game_id).await
+}
+
+#[tauri::command]
+pub async fn local_game_submit_action(
+    game_id: String,
+    action_id: u32,
+    state: State<'_, AppState>,
+) -> CmdResult<LocalGameView> {
+    submit_local_game_action(&state.local_game_sessions, game_id, action_id).await
 }
 
 #[tauri::command]
@@ -1239,6 +1256,7 @@ macro_rules! ipc_handlers {
         ::tauri::generate_handler![
             $crate::ipc::commands::local_game_new,
             $crate::ipc::commands::local_game_get_view,
+            $crate::ipc::commands::local_game_submit_action,
             $crate::ipc::commands::get_config,
             $crate::ipc::commands::update_config,
             $crate::ipc::commands::list_bots,
@@ -1332,6 +1350,37 @@ mod tests {
 
         assert!(read_local_game_view(&store, None).await.is_err());
         assert!(read_local_game_view(&store, Some("missing".into()))
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn local_game_submit_action_returns_updated_view() {
+        let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
+        let handle = create_local_game_session(&store).await.unwrap();
+        let action_id = handle.view.actions[0].id;
+
+        let view = submit_local_game_action(&store, handle.game_id, action_id)
+            .await
+            .unwrap();
+
+        assert_eq!(view.self_hand_tiles.len(), 13);
+        assert_eq!(
+            view.players
+                .iter()
+                .find(|player| player.is_self)
+                .unwrap()
+                .river_tiles
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn local_game_submit_action_rejects_unknown_input() {
+        let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
+
+        assert!(submit_local_game_action(&store, "missing".into(), 1)
             .await
             .is_err());
     }

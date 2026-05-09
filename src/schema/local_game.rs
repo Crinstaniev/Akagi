@@ -8,6 +8,13 @@ pub struct LocalGameSessionHandle {
     pub view: LocalGameView,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalGameSubmitActionRequest {
+    pub game_id: String,
+    pub action_id: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalGameView {

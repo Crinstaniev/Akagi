@@ -19,5 +19,5 @@ pub use ipc::{
     LogEntry, LogSessionInfo, Notification, NotifyLevel, ReadInspectorRequest,
     ReadInspectorResponse, ReadLogRequest, ReadLogResponse, Snapshot,
 };
-pub use local_game::{LocalGameSessionHandle, LocalGameView};
+pub use local_game::{LocalGameSessionHandle, LocalGameSubmitActionRequest, LocalGameView};
 pub use mjai::MjaiEvent;
