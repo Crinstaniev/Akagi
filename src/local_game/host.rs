@@ -32,6 +32,10 @@ impl LocalGameSession {
         self.state.view()
     }
 
+    pub fn set_notice(&mut self, notice: String) {
+        self.state.notice_override = Some(notice);
+    }
+
     pub fn submit_action(&mut self, action_id: u32) -> Result<LocalGameView, String> {
         self.state.submit_action(action_id)?;
         Ok(self.view())
@@ -103,6 +107,7 @@ struct LocalGameSessionState {
     ended: bool,
     decision_points: Vec<LocalDecisionPoint>,
     artifact_status: LocalArtifactStatus,
+    notice_override: Option<String>,
 }
 
 impl LocalGameSessionState {
@@ -127,6 +132,7 @@ impl LocalGameSessionState {
             ended: false,
             decision_points: vec![],
             artifact_status: LocalArtifactStatus::pending(),
+            notice_override: None,
         }
     }
 
@@ -144,7 +150,7 @@ impl LocalGameSessionState {
             } else {
                 "Waiting for your action".into()
             },
-            notice: if self.ended {
+            notice: self.notice_override.clone().unwrap_or_else(|| if self.ended {
                 "The deterministic local lifecycle reached exhaustive draw. Scoring is not wired yet."
                     .into()
             } else if self.turn_index == 0 {
@@ -152,7 +158,7 @@ impl LocalGameSessionState {
             } else {
                 "Deterministic local lifecycle advanced to your next draw. CoachWorker is not wired yet."
                     .into()
-            },
+            }),
             round: LocalGameRoundView {
                 round_label: "E1".into(),
                 honba: 0,

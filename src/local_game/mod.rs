@@ -1,4 +1,5 @@
 pub mod artifact;
+pub mod backend_view;
 pub mod engine;
 pub mod host;
 pub mod review;

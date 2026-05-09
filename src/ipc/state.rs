@@ -159,9 +159,11 @@ impl AppState {
             capture_control: Arc::new(Mutex::new(CaptureControl::default())),
             game_tracker,
             analysis_cache,
-            local_game_sessions: Arc::new(Mutex::new(LocalGameSessionStore::with_artifact_root(
-                resolve_dir(Path::new("./history")).join("local-artifacts"),
-            ))),
+            local_game_sessions: Arc::new(Mutex::new(
+                LocalGameSessionStore::with_artifact_root_and_backend_loader(
+                    resolve_dir(Path::new("./history")).join("local-artifacts"),
+                ),
+            )),
             history_store,
             history_platform,
             runtime,

@@ -29,7 +29,9 @@ pub struct LocalGameView {
     pub dora_indicators: Vec<String>,
     pub actions: Vec<LocalGameActionView>,
     pub recommendations: Vec<LocalGameRecommendationView>,
+    #[serde(default)]
     pub artifact_status: LocalArtifactStatus,
+    #[serde(default)]
     pub review_summary: LocalReviewSummary,
 }
 
@@ -78,6 +80,12 @@ impl LocalArtifactStatus {
             decision_points_path: None,
             error_message: Some(message),
         }
+    }
+}
+
+impl Default for LocalArtifactStatus {
+    fn default() -> Self {
+        Self::pending()
     }
 }
 
