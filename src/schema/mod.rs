@@ -7,6 +7,7 @@
 pub mod history;
 pub mod inspector;
 pub mod ipc;
+pub mod local_game;
 pub mod mjai;
 
 pub use history::{
@@ -18,4 +19,5 @@ pub use ipc::{
     LogEntry, LogSessionInfo, Notification, NotifyLevel, ReadInspectorRequest,
     ReadInspectorResponse, ReadLogRequest, ReadLogResponse, Snapshot,
 };
+pub use local_game::{LocalGameSessionHandle, LocalGameView};
 pub use mjai::MjaiEvent;

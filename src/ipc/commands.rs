@@ -20,8 +20,8 @@ use crate::ipc::capture_supervisor::{
 use crate::ipc::state::AppState;
 use crate::schema::{
     BotInfo, BotSettings, GameRecord, HistoryEvent, HistoryEventLog, HistoryFilter, HoraScoreInfo,
-    InspectorEntry, LogEntry, LogSessionInfo, Notification, ReadInspectorRequest,
-    ReadInspectorResponse, ReadLogRequest, ReadLogResponse, Snapshot,
+    InspectorEntry, LocalGameSessionHandle, LocalGameView, LogEntry, LogSessionInfo, Notification,
+    ReadInspectorRequest, ReadInspectorResponse, ReadLogRequest, ReadLogResponse, Snapshot,
 };
 use crate::util::resolve_dir;
 use std::collections::BTreeMap;
@@ -65,6 +65,16 @@ fn entry_to_info(e: &BotEntry) -> BotInfo {
 }
 
 type CmdResult<T> = Result<T, String>;
+
+#[tauri::command]
+pub async fn local_game_new() -> CmdResult<LocalGameSessionHandle> {
+    Ok(crate::schema::local_game::local_game_session_fixture())
+}
+
+#[tauri::command]
+pub async fn local_game_get_view(_game_id: Option<String>) -> CmdResult<LocalGameView> {
+    Ok(crate::schema::local_game::local_game_view_fixture())
+}
 
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> CmdResult<AppConfig> {
@@ -1207,6 +1217,8 @@ fn persist_config(config: &AppConfig, path: &Path) -> std::io::Result<()> {
 macro_rules! ipc_handlers {
     () => {
         ::tauri::generate_handler![
+            $crate::ipc::commands::local_game_new,
+            $crate::ipc::commands::local_game_get_view,
             $crate::ipc::commands::get_config,
             $crate::ipc::commands::update_config,
             $crate::ipc::commands::list_bots,
@@ -1267,6 +1279,28 @@ mod tests {
         assert_eq!(back.bot.active_4p, "mortal");
         assert_eq!(back.bot.active_3p, "mortal_3p");
         assert_eq!(back.proxy.addr, "127.0.0.1:9999");
+    }
+
+    #[tokio::test]
+    async fn local_game_new_returns_fixture_handle() {
+        let handle = local_game_new().await.unwrap();
+
+        assert_eq!(handle.game_id, "local-fixture-001");
+        assert_eq!(handle.view.schema_version, 1);
+        assert_eq!(handle.view.source, "tauri_fixture");
+        assert_eq!(handle.view.players.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn local_game_get_view_returns_fixture_view() {
+        let view = local_game_get_view(Some("anything".into())).await.unwrap();
+
+        assert_eq!(view.schema_version, 1);
+        assert_eq!(view.source, "tauri_fixture");
+        assert_eq!(
+            view.players.iter().filter(|player| player.is_self).count(),
+            1
+        );
     }
 
     /// Regression: the first-run wizard ships a fresh-install Akagi with

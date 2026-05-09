@@ -1,141 +1,51 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Mahgen } from '@/components/Mahgen'
-
-type LocalGameRoundView = {
-  roundLabel: string
-  honba: number
-  kyotaku: number
-  remainingTiles: number
-  dealerSeat: 0 | 1 | 2 | 3
-}
-
-type LocalGamePlayerView = {
-  seat: 0 | 1 | 2 | 3
-  labelKey: string
-  wind: 'E' | 'S' | 'W' | 'N'
-  score: number
-  riverTiles: string[]
-  melds: string[][]
-  statusTags: string[]
-  isDealer: boolean
-  isSelf: boolean
-}
-
-type LocalGameActionView = {
-  type: 'discard' | 'riichi' | 'skip'
-  labelKey: string
-  hintKey: string
-  enabled: boolean
-}
-
-type LocalGameRecommendationView = {
-  rank: number
-  tile: string
-  labelKey: string
-  noteKey: string
-  source: 'mock'
-}
-
-type LocalGameView = {
-  source: 'fixture'
-  phaseLabel: string
-  notice: string
-  round: LocalGameRoundView
-  players: LocalGamePlayerView[]
-  selfHandTiles: string[]
-  doraIndicators: string[]
-  actions: LocalGameActionView[]
-  recommendations: LocalGameRecommendationView[]
-}
-
-const LOCAL_GAME_VIEW_FIXTURE: LocalGameView = {
-  source: 'fixture',
-  phaseLabel: 'ViewModel fixture',
-  notice: 'Fixture ViewModel only. Not live backend state or real AI recommendation.',
-  round: {
-    roundLabel: 'E1',
-    honba: 0,
-    kyotaku: 0,
-    remainingTiles: 62,
-    dealerSeat: 0,
-  },
-  selfHandTiles: ['123m', '405p', '678s', '11z'],
-  doraIndicators: ['5m'],
-  players: [
-    {
-      seat: 0,
-      labelKey: 'local_table.seat_self',
-      wind: 'E',
-      score: 25000,
-      riverTiles: ['1m', '2p', '9s'],
-      melds: [],
-      statusTags: [],
-      isDealer: true,
-      isSelf: true,
-    },
-    {
-      seat: 1,
-      labelKey: 'local_table.seat_shimocha',
-      wind: 'S',
-      score: 25000,
-      riverTiles: ['3m', '7p', '1z'],
-      melds: [['777z']],
-      statusTags: [],
-      isDealer: false,
-      isSelf: false,
-    },
-    {
-      seat: 2,
-      labelKey: 'local_table.seat_toimen',
-      wind: 'W',
-      score: 25000,
-      riverTiles: ['9m', '2s', '5z'],
-      melds: [],
-      statusTags: [],
-      isDealer: false,
-      isSelf: false,
-    },
-    {
-      seat: 3,
-      labelKey: 'local_table.seat_kamicha',
-      wind: 'N',
-      score: 25000,
-      riverTiles: ['4m', '8p', '3z'],
-      melds: [['333p']],
-      statusTags: [],
-      isDealer: false,
-      isSelf: false,
-    },
-  ],
-  actions: [
-    { type: 'discard', labelKey: 'local_table.action_discard', hintKey: 'local_table.action_placeholder', enabled: false },
-    { type: 'riichi', labelKey: 'local_table.action_riichi', hintKey: 'local_table.action_placeholder', enabled: false },
-    { type: 'skip', labelKey: 'local_table.action_skip', hintKey: 'local_table.action_placeholder', enabled: false },
-  ],
-  recommendations: [
-    {
-      rank: 1,
-      tile: '5p',
-      labelKey: 'local_table.recommendation_1',
-      noteKey: 'local_table.recommendation_mock_note',
-      source: 'mock',
-    },
-    {
-      rank: 2,
-      tile: '9s',
-      labelKey: 'local_table.recommendation_2',
-      noteKey: 'local_table.recommendation_mock_note',
-      source: 'mock',
-    },
-  ],
-}
+import {
+  loadLocalGameView,
+  type LocalGameActionView,
+  type LocalGameLoadResult,
+  type LocalGamePlayerView,
+  type LocalGameRecommendationView,
+  type LocalGameView,
+} from '@/lib/localGame'
 
 export function LocalTable() {
   const { t } = useTranslation()
-  const view = LOCAL_GAME_VIEW_FIXTURE
+  const [loadResult, setLoadResult] = useState<LocalGameLoadResult | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setIsLoading(true)
+    loadLocalGameView()
+      .then((result) => {
+        if (!cancelled) setLoadResult(result)
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!loadResult) {
+    return (
+      <div className="min-h-full bg-background p-4 lg:p-6">
+        <Card>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            {isLoading ? 'Loading local game view...' : 'Local game view unavailable.'}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const { view } = loadResult
   const self = view.players.find((player) => player.isSelf)
   const opponents = view.players.filter((player) => !player.isSelf)
 
@@ -147,9 +57,15 @@ export function LocalTable() {
             <h1 className="text-2xl font-semibold tracking-tight">{t('local_table.title')}</h1>
             <Badge variant="secondary">{t('local_table.mock_badge')}</Badge>
             <Badge variant="outline">{view.phaseLabel}</Badge>
+            <Badge variant={loadResult.mode === 'tauri' ? 'default' : 'destructive'}>
+              {loadResult.mode === 'tauri' ? 'Tauri command' : 'Dev fallback'}
+            </Badge>
           </div>
           <p className="max-w-3xl text-sm text-muted-foreground">{t('local_table.description')}</p>
           <p className="mt-1 max-w-3xl text-xs text-muted-foreground">{view.notice}</p>
+          {loadResult.error && (
+            <p className="mt-1 max-w-3xl text-xs text-destructive">{loadResult.error}</p>
+          )}
         </div>
         <RoundSummary view={view} />
       </div>
@@ -214,7 +130,7 @@ function PlayerPanel({ player }: { player: LocalGamePlayerView }) {
   return (
     <Card className="min-h-36 py-0">
       <CardHeader className="flex flex-row items-center justify-between border-b px-3 py-2">
-        <CardTitle className="text-sm">{t(player.labelKey)}</CardTitle>
+        <CardTitle className="text-sm">{player.relationLabel}</CardTitle>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {player.isDealer && <Badge variant="secondary">{t('local_table.dealer')}</Badge>}
           <span>{player.wind}</span>
@@ -240,10 +156,9 @@ function PlayerPanel({ player }: { player: LocalGamePlayerView }) {
 }
 
 function RiverPreview({ player }: { player: LocalGamePlayerView }) {
-  const { t } = useTranslation()
   return (
     <div className="flex min-h-20 flex-col justify-between rounded border border-emerald-800/40 bg-background/60 p-2">
-      <span className="text-xs text-muted-foreground">{t(player.labelKey)}</span>
+      <span className="text-xs text-muted-foreground">{player.relationLabel}</span>
       <Mahgen seq={player.riverTiles.join('')} kind="river" riverMode />
     </div>
   )
@@ -273,9 +188,9 @@ function ActionPanel({ actions }: { actions: LocalGameActionView[] }) {
       </CardHeader>
       <CardContent className="grid gap-2 p-3">
         {actions.map((action) => (
-          <Button key={action.type} variant="outline" disabled={!action.enabled} className="justify-start">
-            <span>{t(action.labelKey)}</span>
-            <span className="ml-auto text-xs text-muted-foreground">{t(action.hintKey)}</span>
+          <Button key={action.id} variant="outline" disabled={!action.enabled} className="justify-start">
+            <span>{action.label}</span>
+            <span className="ml-auto text-xs text-muted-foreground">{action.hint}</span>
           </Button>
         ))}
       </CardContent>
@@ -294,13 +209,15 @@ function RecommendationPanel({ recommendations }: { recommendations: LocalGameRe
         {recommendations.map((recommendation) => (
           <div key={recommendation.rank} className="rounded-md border p-3">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium">{t(recommendation.labelKey)}</span>
+              <span className="text-sm font-medium">{recommendation.label}</span>
               <Badge variant="outline">#{recommendation.rank}</Badge>
             </div>
-            <div className="mb-2">
-              <Mahgen seq={recommendation.tile} kind="rec" />
-            </div>
-            <p className="text-xs text-muted-foreground">{t(recommendation.noteKey)}</p>
+            {recommendation.tile && (
+              <div className="mb-2">
+                <Mahgen seq={recommendation.tile} kind="rec" />
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">{recommendation.note}</p>
           </div>
         ))}
       </CardContent>
