@@ -50,18 +50,28 @@ pub fn parse_backend_initial_view(bytes: &[u8]) -> Result<LocalGameView, String>
     }
     let raw: Value = serde_json::from_slice(bytes)
         .map_err(|error| format!("backend local-view JSON parse failed: {error}"))?;
-    let leaked = forbidden_keys_in_value(&raw);
-    if !leaked.is_empty() {
-        return Err(format!(
-            "backend LocalGameView contains hidden-information keys: {:?}",
-            leaked
-        ));
-    }
-    let mut view: LocalGameView = serde_json::from_value(raw)
-        .map_err(|error| format!("backend LocalGameView schema parse failed: {error}"))?;
-    validate_backend_view(&view)?;
+    let mut view = parse_backend_view_value(raw)?;
     mark_backend_view_read_only(&mut view);
     Ok(view)
+}
+
+pub fn parse_backend_view_value(raw: Value) -> Result<LocalGameView, String> {
+    reject_forbidden_output_keys(&raw)?;
+    let view: LocalGameView = serde_json::from_value(raw)
+        .map_err(|error| format!("backend LocalGameView schema parse failed: {error}"))?;
+    validate_backend_view(&view)?;
+    Ok(view)
+}
+
+pub fn reject_forbidden_output_keys(raw: &Value) -> Result<(), String> {
+    let leaked = forbidden_keys_in_value(raw);
+    if leaked.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "backend LocalGameView contains hidden-information keys: {:?}",
+        leaked
+    ))
 }
 
 pub fn backend_fallback_notice(error: &str) -> String {
@@ -125,7 +135,7 @@ fn collect_keys(value: &Value, keys: &mut BTreeSet<String>) {
     }
 }
 
-fn find_repo_root() -> Option<PathBuf> {
+pub fn find_repo_root() -> Option<PathBuf> {
     let mut current = std::env::current_dir().ok()?;
     loop {
         if is_repo_root(&current) {

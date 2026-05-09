@@ -1299,7 +1299,76 @@ macro_rules! ipc_handlers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_game::backend_session::{BackendLocalSession, BackendSessionTransport};
+    use serde_json::{json, Value};
+    use std::collections::VecDeque;
     use tempfile::TempDir;
+
+    #[derive(Debug)]
+    struct FakeBackendTransport {
+        responses: VecDeque<Value>,
+    }
+
+    impl FakeBackendTransport {
+        fn new(responses: Vec<Value>) -> Self {
+            Self {
+                responses: responses.into(),
+            }
+        }
+    }
+
+    impl BackendSessionTransport for FakeBackendTransport {
+        fn send_request(&mut self, _request: Value) -> Result<Value, String> {
+            self.responses
+                .pop_front()
+                .ok_or_else(|| "no fake backend response queued".into())
+        }
+    }
+
+    fn backend_view(action_id: u32, tile: &str) -> Value {
+        json!({
+            "schemaVersion": 1,
+            "source": "backend_mapper",
+            "engine": {"schemaVersion": 1, "source": "backend_riichienv_mapper", "status": "active", "capabilities": ["discard"], "note": "Backend mapper"},
+            "phaseLabel": "Human decision",
+            "notice": "Backend mapper view.",
+            "round": {"roundLabel": "kyoku 1", "honba": 0, "kyotaku": 0, "remainingTiles": 0, "dealerSeat": 0},
+            "players": [
+                {"seat": 0, "relationLabel": "自家", "wind": "E", "score": 25000, "riverTiles": [], "melds": [], "statusTags": ["thinking"], "isDealer": true, "isSelf": true},
+                {"seat": 1, "relationLabel": "下家", "wind": "S", "score": 25000, "riverTiles": [], "melds": [], "statusTags": [], "isDealer": false, "isSelf": false},
+                {"seat": 2, "relationLabel": "对面", "wind": "W", "score": 25000, "riverTiles": [], "melds": [], "statusTags": [], "isDealer": false, "isSelf": false},
+                {"seat": 3, "relationLabel": "上家", "wind": "N", "score": 25000, "riverTiles": [], "melds": [], "statusTags": [], "isDealer": false, "isSelf": false}
+            ],
+            "selfHandTiles": ["1m"],
+            "doraIndicators": ["5m"],
+            "actions": [{"id": action_id, "type": "discard", "label": format!("dahai {tile}"), "hint": "合法动作", "enabled": true, "tile": tile}],
+            "recommendations": [{"rank": 1, "actionId": action_id, "tile": tile, "label": format!("dahai {tile}"), "source": "deterministic_baseline", "status": "recommended", "note": "first"}]
+        })
+    }
+
+    fn backend_response(action_id: u32, tile: &str) -> Value {
+        json!({
+            "type": "local_session_response",
+            "requestId": "tauri-test",
+            "ok": true,
+            "gameId": "backend-command",
+            "view": backend_view(action_id, tile),
+            "terminal": false,
+            "endReason": null,
+            "error": null
+        })
+    }
+
+    fn command_backend_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+        BackendLocalSession::start_with_transport(
+            1,
+            Box::new(FakeBackendTransport::new(vec![
+                backend_response(1, "1m"),
+                backend_response(2, "2m"),
+                backend_response(3, "3m"),
+            ])),
+        )
+    }
 
     #[test]
     fn persist_config_round_trips() {
@@ -1374,6 +1443,26 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn local_game_commands_submit_through_backend_session() {
+        let store = Arc::new(Mutex::new(
+            LocalGameSessionStore::with_backend_session_starter(command_backend_session_starter),
+        ));
+        let handle = create_local_game_session(&store).await.unwrap();
+
+        let submitted = submit_local_game_action(&store, handle.game_id.clone(), 1)
+            .await
+            .unwrap();
+        let latest = read_local_game_view(&store, Some(handle.game_id))
+            .await
+            .unwrap();
+
+        assert_eq!(handle.view.engine.source, "backend_riichienv_mapper");
+        assert_eq!(submitted.source, "backend_mapper");
+        assert_eq!(submitted.actions[0].id, 2);
+        assert_eq!(latest.actions[0].id, 3);
     }
 
     #[tokio::test]
