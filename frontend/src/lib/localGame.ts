@@ -121,7 +121,7 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
     remainingTiles: 62,
     dealerSeat: 0,
   },
-  selfHandTiles: ['123m', '405p', '678s', '11z'],
+  selfHandTiles: ['1m', '2m', '3m', '4p', '5pr', '6p', '6s', '7s', '8s', 'E', 'E'],
   doraIndicators: ['5m'],
   players: [
     {
@@ -180,7 +180,12 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
       mjai: { type: 'dahai', actor: 0, pai: '5p' },
     },
     { id: 2, type: 'riichi', label: 'Riichi', hint: 'Not wired yet', enabled: false },
-    { id: 3, type: 'pass', label: 'Pass', hint: 'Not wired yet', enabled: false },
+    { id: 3, type: 'chi', label: 'Chi 3m-4m-5m', hint: 'Not wired yet', enabled: false },
+    { id: 4, type: 'pon', label: 'Pon P', hint: 'Not wired yet', enabled: false },
+    { id: 5, type: 'kan', label: 'Kan 9s', hint: 'Not wired yet', enabled: false },
+    { id: 6, type: 'ron', label: 'Ron', hint: 'Not wired yet', enabled: false },
+    { id: 7, type: 'tsumo', label: 'Tsumo', hint: 'Not wired yet', enabled: false },
+    { id: 8, type: 'pass', label: 'Pass', hint: 'Not wired yet', enabled: false },
   ],
   recommendations: [
     {

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Mahgen } from '@/components/Mahgen'
+import { mjaiToMahgen } from '@/lib/tileIdx'
 import {
   loadLocalGameView,
   submitLocalGameAction,
@@ -182,7 +183,7 @@ function RoundSummary({ view }: { view: LocalGameView }) {
         <Stat label={t('local_table.kyotaku')} value={String(view.round.kyotaku)} />
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase text-muted-foreground">{t('local_table.dora')}</span>
-          <Mahgen seq={view.doraIndicators.join('')} kind="dora" />
+          <SafeTiles tiles={view.doraIndicators} kind="dora" />
         </div>
       </CardContent>
     </Card>
@@ -202,12 +203,12 @@ function PlayerPanel({ player }: { player: LocalGamePlayerView }) {
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 p-3">
-        <TileGroup label={t('local_table.river')} seq={player.riverTiles.join('')} kind="river" riverMode />
+        <TileGroup label={t('local_table.river')} tiles={player.riverTiles} kind="river" riverMode />
         <div className="min-h-8">
           {player.melds.length ? (
             <div className="flex flex-wrap gap-2">
               {player.melds.map((meld, index) => (
-                <Mahgen key={`${player.seat}-${index}`} seq={meld.join('')} kind="melds" />
+                <SafeTiles key={`${player.seat}-${index}`} tiles={meld} kind="melds" />
               ))}
             </div>
           ) : (
@@ -223,7 +224,7 @@ function RiverPreview({ player }: { player: LocalGamePlayerView }) {
   return (
     <div className="flex min-h-20 flex-col justify-between rounded border border-emerald-800/40 bg-background/60 p-2">
       <span className="text-xs text-muted-foreground">{player.relationLabel}</span>
-      <Mahgen seq={player.riverTiles.join('')} kind="river" riverMode />
+      <SafeTiles tiles={player.riverTiles} kind="river" riverMode />
     </div>
   )
 }
@@ -237,7 +238,7 @@ function SelfHandPanel({ selfHandTiles }: { selfHandTiles: string[] }) {
         <span className="text-xs text-muted-foreground">{t('local_table.self_hand_hint')}</span>
       </CardHeader>
       <CardContent className="overflow-auto p-4">
-        <Mahgen seq={selfHandTiles.join('')} kind="hand" />
+        <SafeTiles tiles={selfHandTiles} kind="hand" />
       </CardContent>
     </Card>
   )
@@ -270,8 +271,13 @@ function ActionPanel({
             onClick={() => onSubmitAction(action.id)}
           >
             <Badge variant={action.type === 'discard' ? 'secondary' : 'outline'}>
-              {action.type}
+              {actionTypeLabel(t, action.type)}
             </Badge>
+            {action.tile && (
+              <span className="shrink-0">
+                <SafeTiles tiles={[action.tile]} kind="rec" fallback={action.tile} />
+              </span>
+            )}
             <span className="min-w-0 flex-1 truncate text-left">{action.label}</span>
             <span className="max-w-32 truncate text-xs text-muted-foreground">
               {submittingActionId === action.id ? t('local_table.submitting_action') : action.hint}
@@ -299,7 +305,7 @@ function RecommendationPanel({ recommendations }: { recommendations: LocalGameRe
             </div>
             {recommendation.tile && (
               <div className="mb-2">
-                <Mahgen seq={recommendation.tile} kind="rec" />
+                <SafeTiles tiles={[recommendation.tile]} kind="rec" fallback={recommendation.tile} />
               </div>
             )}
             <p className="text-xs text-muted-foreground">{recommendation.note}</p>
@@ -405,21 +411,63 @@ function ReviewSummaryPanel({ view }: { view: LocalGameView }) {
 
 function TileGroup({
   label,
-  seq,
+  tiles,
   kind,
   riverMode,
 }: {
   label: string
-  seq: string
+  tiles: string[]
   kind: 'river' | 'hand' | 'melds' | 'dora' | 'rec'
   riverMode?: boolean
 }) {
   return (
     <div className="grid gap-1">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <Mahgen seq={seq} kind={kind} riverMode={riverMode} />
+      <SafeTiles tiles={tiles} kind={kind} riverMode={riverMode} />
     </div>
   )
+}
+
+function SafeTiles({
+  tiles,
+  kind,
+  riverMode,
+  fallback,
+}: {
+  tiles: string[]
+  kind: 'river' | 'hand' | 'melds' | 'dora' | 'rec'
+  riverMode?: boolean
+  fallback?: string
+}) {
+  const seq = mjaiToMahgen(tiles)
+  if (seq) return <Mahgen seq={seq} kind={kind} riverMode={riverMode} />
+
+  const text = fallback ?? tiles.filter(Boolean).join(' ')
+  if (!text) return <span className="text-xs text-muted-foreground">-</span>
+
+  return (
+    <span className="inline-flex max-w-full flex-wrap gap-1 align-middle">
+      {text.split(/\s+/).map((part, index) => (
+        <Badge key={`${part}-${index}`} variant="outline" className="font-mono text-[11px]">
+          {part}
+        </Badge>
+      ))}
+    </span>
+  )
+}
+
+function actionTypeLabel(t: ReturnType<typeof useTranslation>['t'], actionType: string) {
+  const normalized = normalizeActionType(actionType)
+  return t(`local_table.action_${normalized}`, { defaultValue: actionType })
+}
+
+function normalizeActionType(actionType: string) {
+  const value = actionType.toLowerCase()
+  if (value === 'dahai') return 'discard'
+  if (value === 'reach') return 'riichi'
+  if (value === 'skip' || value === 'none') return 'pass'
+  if (value.includes('kan')) return 'kan'
+  return value
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

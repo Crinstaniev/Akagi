@@ -429,4 +429,29 @@ mod tests {
         assert!(terminal.notice.contains("exhaustive_draw"));
         assert!(terminal.actions.iter().all(|action| !action.enabled));
     }
+
+    #[test]
+    fn backend_session_submit_error_preserves_latest_view() {
+        let transport = Box::new(FakeTransport::new(vec![
+            ok_response("tauri-1", "backend-1", view(1, "1m")),
+            json!({
+                "type": "local_session_response",
+                "requestId": "tauri-2",
+                "ok": false,
+                "gameId": "backend-1",
+                "view": null,
+                "terminal": false,
+                "endReason": null,
+                "error": "unknown legal action id"
+            }),
+        ]));
+        let mut session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+
+        let error = session.submit_action(99).unwrap_err();
+        let latest = session.latest_view().unwrap();
+
+        assert!(error.contains("unknown legal action id"));
+        assert_eq!(latest.actions[0].id, 1);
+        assert_eq!(latest.engine.status, "active");
+    }
 }

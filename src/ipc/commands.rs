@@ -1359,6 +1359,32 @@ mod tests {
         })
     }
 
+    fn backend_terminal_response() -> Value {
+        json!({
+            "type": "local_session_response",
+            "requestId": "tauri-terminal",
+            "ok": true,
+            "gameId": "backend-command",
+            "view": null,
+            "terminal": true,
+            "endReason": "tsumo",
+            "error": null
+        })
+    }
+
+    fn backend_submit_error_response() -> Value {
+        json!({
+            "type": "local_session_response",
+            "requestId": "tauri-submit",
+            "ok": false,
+            "gameId": "backend-command",
+            "view": null,
+            "terminal": false,
+            "endReason": null,
+            "error": "unknown legal action id"
+        })
+    }
+
     fn command_backend_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
         BackendLocalSession::start_with_transport(
             1,
@@ -1366,6 +1392,29 @@ mod tests {
                 backend_response(1, "1m"),
                 backend_response(2, "2m"),
                 backend_response(3, "3m"),
+            ])),
+        )
+    }
+
+    fn command_backend_terminal_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+        BackendLocalSession::start_with_transport(
+            1,
+            Box::new(FakeBackendTransport::new(vec![
+                backend_response(1, "1m"),
+                backend_terminal_response(),
+            ])),
+        )
+    }
+
+    fn command_backend_submit_error_session_starter(
+        _seed: u64,
+    ) -> Result<BackendLocalSession, String> {
+        BackendLocalSession::start_with_transport(
+            1,
+            Box::new(FakeBackendTransport::new(vec![
+                backend_response(1, "1m"),
+                backend_submit_error_response(),
+                backend_response(1, "1m"),
             ])),
         )
     }
@@ -1463,6 +1512,45 @@ mod tests {
         assert_eq!(submitted.source, "backend_mapper");
         assert_eq!(submitted.actions[0].id, 2);
         assert_eq!(latest.actions[0].id, 3);
+    }
+
+    #[tokio::test]
+    async fn local_game_commands_surface_backend_submit_error() {
+        let store = Arc::new(Mutex::new(
+            LocalGameSessionStore::with_backend_session_starter(
+                command_backend_submit_error_session_starter,
+            ),
+        ));
+        let handle = create_local_game_session(&store).await.unwrap();
+
+        let error = submit_local_game_action(&store, handle.game_id.clone(), 99)
+            .await
+            .unwrap_err();
+        let latest = read_local_game_view(&store, Some(handle.game_id))
+            .await
+            .unwrap();
+
+        assert!(error.contains("unknown legal action id"));
+        assert_eq!(latest.actions[0].id, 1);
+        assert_eq!(latest.engine.status, "active");
+    }
+
+    #[tokio::test]
+    async fn local_game_commands_return_backend_terminal_view() {
+        let store = Arc::new(Mutex::new(
+            LocalGameSessionStore::with_backend_session_starter(
+                command_backend_terminal_session_starter,
+            ),
+        ));
+        let handle = create_local_game_session(&store).await.unwrap();
+
+        let terminal = submit_local_game_action(&store, handle.game_id, 1)
+            .await
+            .unwrap();
+
+        assert_eq!(terminal.engine.status, "terminal");
+        assert!(terminal.notice.contains("tsumo"));
+        assert!(terminal.actions.iter().all(|action| !action.enabled));
     }
 
     #[tokio::test]
