@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "本地牌桌",
-    "description": "本地训练牌桌已支持提交切牌，并用 deterministic AI 自动推进对手直到下一次自家行动；真实 CoachWorker 推荐后续接入。",
+    "description": "本地训练牌桌已支持 deterministic 摸切生命周期，可一路推进到流局；分数结算和真实 CoachWorker 推荐后续接入。",
     "mock_badge": "Mock 数据",
     "seat_self": "自家",
     "seat_shimocha": "下家",
@@ -35,7 +35,7 @@
     "recommendations": "Deterministic 推荐占位",
     "recommendation_1": "推荐切牌",
     "recommendation_2": "候选切牌",
-    "recommendation_mock_note": "对手会用 deterministic 逻辑自动推进；这里尚未调用 CoachWorker。"
+    "recommendation_mock_note": "当前会用 deterministic 生命周期推进到流局；这里尚未调用 CoachWorker。"
   },
   "history": {
     "title": "历史记录",

@@ -56,11 +56,12 @@ impl LocalGameHost {
 struct LocalGameSessionState {
     self_hand_tiles: Vec<String>,
     player_river_tiles: Vec<Vec<String>>,
-    opponent_discard_tiles: Vec<String>,
+    draw_tiles: Vec<String>,
     dora_indicator: String,
     remaining_tiles: u32,
     turn_index: u32,
     actions_enabled: bool,
+    ended: bool,
 }
 
 impl LocalGameSessionState {
@@ -70,17 +71,19 @@ impl LocalGameSessionState {
         wall.rotate_left(offset);
 
         let self_hand_tiles = wall.iter().take(14).cloned().collect();
-        let opponent_discard_tiles = wall.iter().skip(14).take(72).cloned().collect();
+        let draw_tiles = wall.iter().skip(14).take(70).cloned().collect::<Vec<_>>();
         let dora_indicator = wall.get(53).cloned().unwrap_or_else(|| "5m".into());
+        let remaining_tiles = draw_tiles.len() as u32;
 
         Self {
             self_hand_tiles,
             player_river_tiles: vec![vec![], vec![], vec![], vec![]],
-            opponent_discard_tiles,
+            draw_tiles,
             dora_indicator,
-            remaining_tiles: 70,
+            remaining_tiles,
             turn_index: 0,
             actions_enabled: true,
+            ended: false,
         }
     }
 
@@ -90,15 +93,21 @@ impl LocalGameSessionState {
         LocalGameView {
             schema_version: 1,
             source: "local_game_host".into(),
-            phase_label: if self.turn_index == 0 {
+            phase_label: if self.ended {
+                "Exhaustive draw".into()
+            } else if self.turn_index == 0 {
                 "Initial local hand".into()
             } else {
                 "Waiting for your action".into()
             },
-            notice: if self.turn_index == 0 {
+            notice: if self.ended {
+                "The deterministic local lifecycle reached exhaustive draw. Scoring is not wired yet."
+                    .into()
+            } else if self.turn_index == 0 {
                 "Local game session view. Submit a discard to update this session.".into()
             } else {
-                "Deterministic AI auto-advance completed. CoachWorker is not wired yet.".into()
+                "Deterministic local lifecycle advanced to your next draw. CoachWorker is not wired yet."
+                    .into()
             },
             round: LocalGameRoundView {
                 round_label: "E1".into(),
@@ -116,6 +125,9 @@ impl LocalGameSessionState {
     }
 
     fn submit_action(&mut self, action_id: u32) -> Result<(), String> {
+        if self.ended {
+            return Err("local game session already ended".into());
+        }
         let actions = self.discard_actions();
         let action = actions
             .iter()
@@ -141,24 +153,46 @@ impl LocalGameSessionState {
 
         let tile = self.self_hand_tiles.remove(index);
         self.player_river_tiles[0].push(tile);
-        self.remaining_tiles = self.remaining_tiles.saturating_sub(1);
-        self.auto_advance_opponents();
+        self.advance_lifecycle();
         self.turn_index += 1;
         Ok(())
     }
 
-    fn auto_advance_opponents(&mut self) {
+    fn advance_lifecycle(&mut self) {
         for seat in 1..=3 {
-            let tile = self
-                .opponent_discard_tiles
-                .pop()
-                .unwrap_or_else(|| fallback_opponent_tile(seat, self.turn_index));
+            let Some(tile) = self.draw_tile() else {
+                self.end_exhaustive_draw();
+                return;
+            };
             self.player_river_tiles[seat].push(tile);
-            self.remaining_tiles = self.remaining_tiles.saturating_sub(1);
         }
+
+        let Some(tile) = self.draw_tile() else {
+            self.end_exhaustive_draw();
+            return;
+        };
+        self.self_hand_tiles.push(tile);
+    }
+
+    fn draw_tile(&mut self) -> Option<String> {
+        if self.remaining_tiles == 0 {
+            return None;
+        }
+        let tile = self.draw_tiles.pop()?;
+        self.remaining_tiles = self.remaining_tiles.saturating_sub(1);
+        Some(tile)
+    }
+
+    fn end_exhaustive_draw(&mut self) {
+        self.ended = true;
+        self.actions_enabled = false;
+        self.remaining_tiles = 0;
     }
 
     fn discard_actions(&self) -> Vec<LocalGameActionView> {
+        if self.ended {
+            return vec![];
+        }
         self.self_hand_tiles
             .iter()
             .enumerate()
@@ -203,12 +237,6 @@ fn player_views(player_river_tiles: &[Vec<String>]) -> Vec<LocalGamePlayerView> 
         .collect()
 }
 
-fn fallback_opponent_tile(seat: usize, turn_index: u32) -> String {
-    const FALLBACK_TILES: [&str; 9] = ["1p", "2p", "3p", "4s", "5s", "6s", "E", "S", "W"];
-    let index = (seat + turn_index as usize) % FALLBACK_TILES.len();
-    FALLBACK_TILES[index].into()
-}
-
 fn recommendation_from_first_action(
     actions: &[LocalGameActionView],
 ) -> LocalGameRecommendationView {
@@ -226,7 +254,11 @@ fn recommendation_from_first_action(
         } else {
             "unavailable".into()
         },
-        note: "Deterministic placeholder until CoachWorker is wired.".into(),
+        note: if action.is_some() {
+            "Deterministic placeholder until CoachWorker is wired.".into()
+        } else {
+            "The local hand ended in exhaustive draw.".into()
+        },
     }
 }
 
@@ -317,15 +349,12 @@ mod tests {
 
         let after = session.submit_action(before.actions[0].id).unwrap();
 
-        assert_eq!(
-            after.self_hand_tiles.len(),
-            before.self_hand_tiles.len() - 1
-        );
+        assert_eq!(after.self_hand_tiles.len(), before.self_hand_tiles.len());
         let self_player = after.players.iter().find(|player| player.is_self).unwrap();
         assert_eq!(self_player.river_tiles, vec![discarded]);
-        assert_eq!(after.actions.len(), before.actions.len() - 1);
+        assert_eq!(after.actions.len(), before.actions.len());
         assert_eq!(after.phase_label, "Waiting for your action");
-        assert!(after.notice.contains("auto-advance completed"));
+        assert!(after.notice.contains("next draw"));
     }
 
     #[test]
@@ -354,6 +383,32 @@ mod tests {
             before.round.remaining_tiles - 4
         );
         assert!(after.actions.iter().any(|action| action.enabled));
+    }
+
+    #[test]
+    fn repeated_submit_keeps_self_hand_sustainable() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+
+        for _ in 0..3 {
+            let before = session.view();
+            let action_id = before.actions[0].id;
+            let after = session.submit_action(action_id).unwrap();
+
+            assert_eq!(after.self_hand_tiles.len(), 14);
+            assert!(after.actions.iter().any(|action| action.enabled));
+        }
+    }
+
+    #[test]
+    fn repeated_submit_grows_all_rivers() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+
+        let first = session.submit_action(1).unwrap();
+        let second = session.submit_action(first.actions[0].id).unwrap();
+
+        for seat in 0..=3 {
+            assert_eq!(river_len(&second, seat), 2);
+        }
     }
 
     #[test]
@@ -387,6 +442,36 @@ mod tests {
         assert!(error.contains("disabled"));
         assert_eq!(session.view(), before);
         assert_eq!(total_river_len(&session.view()), total_river_len(&before));
+    }
+
+    #[test]
+    fn submit_enters_exhaustive_draw_when_draw_pool_runs_out() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+        session.state.draw_tiles = vec!["1p".into(), "2p".into(), "3p".into()];
+        session.state.remaining_tiles = session.state.draw_tiles.len() as u32;
+        let before = session.view();
+
+        let after = session.submit_action(before.actions[0].id).unwrap();
+
+        assert_eq!(after.phase_label, "Exhaustive draw");
+        assert_eq!(after.round.remaining_tiles, 0);
+        assert!(after.actions.is_empty());
+        assert_eq!(after.recommendations[0].status, "unavailable");
+        assert!(after.recommendations[0].action_id.is_none());
+    }
+
+    #[test]
+    fn terminal_submit_returns_error_and_preserves_view() {
+        let mut session = LocalGameHost::new(1).start_session("local-test".into());
+        session.state.draw_tiles = vec!["1p".into(), "2p".into(), "3p".into()];
+        session.state.remaining_tiles = session.state.draw_tiles.len() as u32;
+        let action_id = session.view().actions[0].id;
+        let ended = session.submit_action(action_id).unwrap();
+
+        let error = session.submit_action(action_id).unwrap_err();
+
+        assert!(error.contains("already ended"));
+        assert_eq!(session.view(), ended);
     }
 
     #[test]

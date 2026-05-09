@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "本地牌桌",
-    "description": "本地訓練牌桌已支援提交切牌，並用 deterministic AI 自動推進對手直到下一次自家行動；真實 CoachWorker 推薦後續接入。",
+    "description": "本地訓練牌桌已支援 deterministic 摸切生命週期，可一路推進到流局；分數結算和真實 CoachWorker 推薦後續接入。",
     "mock_badge": "Mock 資料",
     "seat_self": "自家",
     "seat_shimocha": "下家",
@@ -35,7 +35,7 @@
     "recommendations": "Deterministic 推薦占位",
     "recommendation_1": "推薦切牌",
     "recommendation_2": "候選切牌",
-    "recommendation_mock_note": "對手會用 deterministic 邏輯自動推進；這裡尚未呼叫 CoachWorker。"
+    "recommendation_mock_note": "目前會用 deterministic 生命週期推進到流局；這裡尚未呼叫 CoachWorker。"
   },
   "history": {
     "title": "歷史紀錄",

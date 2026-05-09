@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "Local Table",
-    "description": "The local training table now submits discards and deterministically advances opponents back to your next action. Real CoachWorker recommendations come later.",
+    "description": "The local training table now runs a deterministic draw/discard lifecycle to exhaustive draw. Scoring and real CoachWorker recommendations come later.",
     "mock_badge": "Mock data",
     "seat_self": "Self",
     "seat_shimocha": "Shimocha",
@@ -35,7 +35,7 @@
     "recommendations": "Deterministic recommendation placeholder",
     "recommendation_1": "Recommended discard",
     "recommendation_2": "Candidate discard",
-    "recommendation_mock_note": "Opponents auto-advance deterministically; CoachWorker is not called yet."
+    "recommendation_mock_note": "The lifecycle advances deterministically to exhaustive draw; CoachWorker is not called yet."
   },
   "history": {
     "title": "Game History",

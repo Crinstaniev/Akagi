@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "ローカル卓",
-    "description": "ローカルトレーニング卓は打牌送信後、deterministic AI で相手を自家の次アクションまで自動進行します。実際の CoachWorker 推薦は後続で接続します。",
+    "description": "ローカルトレーニング卓は deterministic なツモ切りライフサイクルで流局まで進行できます。点数計算と実際の CoachWorker 推薦は後続で接続します。",
     "mock_badge": "Mock データ",
     "seat_self": "自家",
     "seat_shimocha": "下家",
@@ -35,7 +35,7 @@
     "recommendations": "Deterministic 推薦枠",
     "recommendation_1": "推薦打牌",
     "recommendation_2": "候補打牌",
-    "recommendation_mock_note": "相手は deterministic ロジックで自動進行します。CoachWorker はまだ呼び出しません。"
+    "recommendation_mock_note": "deterministic なライフサイクルで流局まで進行します。CoachWorker はまだ呼び出しません。"
   },
   "history": {
     "title": "対局履歴",

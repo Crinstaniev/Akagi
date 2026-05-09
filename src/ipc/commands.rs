@@ -1364,7 +1364,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(view.self_hand_tiles.len(), 13);
+        assert_eq!(view.self_hand_tiles.len(), 14);
         assert_eq!(
             view.players
                 .iter()

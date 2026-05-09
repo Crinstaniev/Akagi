@@ -105,10 +105,7 @@ mod tests {
             .submit_action(&handle.game_id, before.actions[0].id)
             .unwrap();
 
-        assert_eq!(
-            after.self_hand_tiles.len(),
-            before.self_hand_tiles.len() - 1
-        );
+        assert_eq!(after.self_hand_tiles.len(), before.self_hand_tiles.len());
         assert_eq!(
             after
                 .players
