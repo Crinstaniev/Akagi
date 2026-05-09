@@ -43,7 +43,15 @@
     "artifact_pending": "等待寫入",
     "artifact_waiting": "終局後儲存",
     "replay_path": "Replay",
-    "decision_points_path": "決策點"
+    "decision_points_path": "決策點",
+    "review_summary": "最小復盤",
+    "review_total": "決策",
+    "review_top1": "命中",
+    "review_focus": "關注",
+    "review_turn": "第 {{count}} 次",
+    "review_human": "使用者",
+    "review_recommended": "推薦",
+    "review_unavailable": "不可用"
   },
   "history": {
     "title": "歷史紀錄",

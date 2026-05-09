@@ -21,5 +21,6 @@ pub use ipc::{
 };
 pub use local_game::{
     LocalArtifactStatus, LocalGameSessionHandle, LocalGameSubmitActionRequest, LocalGameView,
+    LocalReviewKeyChoice, LocalReviewSummary,
 };
 pub use mjai::MjaiEvent;

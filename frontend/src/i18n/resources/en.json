@@ -43,7 +43,15 @@
     "artifact_pending": "Pending write",
     "artifact_waiting": "Saved at end",
     "replay_path": "Replay",
-    "decision_points_path": "Decision points"
+    "decision_points_path": "Decision points",
+    "review_summary": "Review summary",
+    "review_total": "Decisions",
+    "review_top1": "Top-1",
+    "review_focus": "Focus",
+    "review_turn": "Decision {{count}}",
+    "review_human": "Human",
+    "review_recommended": "Recommended",
+    "review_unavailable": "Unavailable"
   },
   "history": {
     "title": "Game History",

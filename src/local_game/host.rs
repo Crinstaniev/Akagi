@@ -1,4 +1,5 @@
 use super::artifact::{write_local_artifacts, LocalDecisionPoint};
+use super::review::build_local_review_summary;
 use crate::schema::local_game::{
     LocalArtifactStatus, LocalGameActionView, LocalGamePlayerView, LocalGameRecommendationView,
     LocalGameRoundView, LocalGameView,
@@ -163,6 +164,7 @@ impl LocalGameSessionState {
             actions,
             recommendations: vec![recommendation],
             artifact_status: self.artifact_status.clone(),
+            review_summary: build_local_review_summary(&self.decision_points),
         }
     }
 

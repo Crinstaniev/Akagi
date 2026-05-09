@@ -43,7 +43,15 @@
     "artifact_pending": "書き込み待ち",
     "artifact_waiting": "終局後に保存",
     "replay_path": "Replay",
-    "decision_points_path": "Decision points"
+    "decision_points_path": "Decision points",
+    "review_summary": "最小レビュー",
+    "review_total": "判断",
+    "review_top1": "一致",
+    "review_focus": "注目",
+    "review_turn": "{{count}} 回目",
+    "review_human": "ユーザー",
+    "review_recommended": "推奨",
+    "review_unavailable": "利用不可"
   },
   "history": {
     "title": "対局履歴",

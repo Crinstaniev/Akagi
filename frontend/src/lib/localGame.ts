@@ -47,6 +47,25 @@ export type LocalArtifactStatus = {
   errorMessage: string | null
 }
 
+export type LocalReviewKeyChoice = {
+  turnIndex: number
+  humanActionLabel: string
+  recommendedActionLabel: string | null
+  humanTile: string | null
+  recommendedTile: string | null
+  category: string
+}
+
+export type LocalReviewSummary = {
+  schemaVersion: number
+  source: string
+  totalDecisions: number
+  top1Matches: number
+  mismatchCount: number
+  keyChoices: LocalReviewKeyChoice[]
+  note: string
+}
+
 export type LocalGameView = {
   schemaVersion: number
   source: string
@@ -59,6 +78,7 @@ export type LocalGameView = {
   actions: LocalGameActionView[]
   recommendations: LocalGameRecommendationView[]
   artifactStatus: LocalArtifactStatus
+  reviewSummary: LocalReviewSummary
 }
 
 export type LocalGameSessionHandle = {
@@ -162,6 +182,15 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
     replayPath: null,
     decisionPointsPath: null,
     errorMessage: null,
+  },
+  reviewSummary: {
+    schemaVersion: 1,
+    source: 'frontend_dev_fallback',
+    totalDecisions: 0,
+    top1Matches: 0,
+    mismatchCount: 0,
+    keyChoices: [],
+    note: 'Dev fallback only; no local review summary.',
   },
 }
 

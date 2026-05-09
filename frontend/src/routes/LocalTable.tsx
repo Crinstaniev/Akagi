@@ -134,6 +134,7 @@ export function LocalTable() {
           />
           <RecommendationPanel recommendations={view.recommendations} />
           <ArtifactPanel view={view} />
+          <ReviewSummaryPanel view={view} />
         </aside>
       </div>
     </div>
@@ -321,6 +322,49 @@ function PathLine({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <code className="break-all rounded border bg-muted px-2 py-1 font-mono text-[11px]">{value}</code>
     </div>
+  )
+}
+
+function ReviewSummaryPanel({ view }: { view: LocalGameView }) {
+  const { t } = useTranslation()
+  const summary = view.reviewSummary
+  return (
+    <Card className="py-0">
+      <CardHeader className="border-b px-3 py-2">
+        <CardTitle className="text-sm">{t('local_table.review_summary')}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 p-3">
+        <div className="grid grid-cols-3 gap-2">
+          <Stat label={t('local_table.review_total')} value={String(summary.totalDecisions)} />
+          <Stat label={t('local_table.review_top1')} value={String(summary.top1Matches)} />
+          <Stat label={t('local_table.review_focus')} value={String(summary.mismatchCount)} />
+        </div>
+        <p className="text-xs text-muted-foreground">{summary.note}</p>
+        {summary.keyChoices.length > 0 && (
+          <div className="grid gap-2">
+            {summary.keyChoices.slice(0, 5).map((choice) => (
+              <div key={choice.turnIndex} className="rounded-md border p-2 text-xs">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {t('local_table.review_turn', { count: choice.turnIndex + 1 })}
+                  </span>
+                  <Badge variant="outline">{choice.category}</Badge>
+                </div>
+                <div className="grid gap-1 text-muted-foreground">
+                  <span>
+                    {t('local_table.review_human')}: {choice.humanActionLabel}
+                  </span>
+                  <span>
+                    {t('local_table.review_recommended')}:{' '}
+                    {choice.recommendedActionLabel ?? t('local_table.review_unavailable')}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

@@ -29,6 +29,7 @@ pub struct LocalGameView {
     pub actions: Vec<LocalGameActionView>,
     pub recommendations: Vec<LocalGameRecommendationView>,
     pub artifact_status: LocalArtifactStatus,
+    pub review_summary: LocalReviewSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,4 +119,27 @@ pub struct LocalGameRecommendationView {
     pub source: String,
     pub status: String,
     pub note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalReviewSummary {
+    pub schema_version: u32,
+    pub source: String,
+    pub total_decisions: u32,
+    pub top1_matches: u32,
+    pub mismatch_count: u32,
+    pub key_choices: Vec<LocalReviewKeyChoice>,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalReviewKeyChoice {
+    pub turn_index: u32,
+    pub human_action_label: String,
+    pub recommended_action_label: Option<String>,
+    pub human_tile: Option<String>,
+    pub recommended_tile: Option<String>,
+    pub category: String,
 }
