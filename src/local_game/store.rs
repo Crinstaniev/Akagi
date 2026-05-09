@@ -1,12 +1,14 @@
 use super::host::{LocalGameHost, LocalGameSession};
 use crate::schema::{LocalGameSessionHandle, LocalGameView};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use ulid::Ulid;
 
 #[derive(Debug, Default)]
 pub struct LocalGameSessionStore {
     sessions: BTreeMap<String, LocalGameSession>,
     next_seed: u64,
+    artifact_root: Option<PathBuf>,
 }
 
 impl LocalGameSessionStore {
@@ -14,6 +16,15 @@ impl LocalGameSessionStore {
         Self {
             sessions: BTreeMap::new(),
             next_seed: 1,
+            artifact_root: None,
+        }
+    }
+
+    pub fn with_artifact_root(artifact_root: PathBuf) -> Self {
+        Self {
+            sessions: BTreeMap::new(),
+            next_seed: 1,
+            artifact_root: Some(artifact_root),
         }
     }
 
@@ -49,10 +60,18 @@ impl LocalGameSessionStore {
         if trimmed.is_empty() {
             return Err("gameId is required".into());
         }
-        self.sessions
+        let session = self
+            .sessions
             .get_mut(trimmed)
-            .ok_or_else(|| format!("local game session not found: {trimmed}"))?
-            .submit_action(action_id)
+            .ok_or_else(|| format!("local game session not found: {trimmed}"))?;
+        let view = session.submit_action(action_id)?;
+        if view.phase_label == "Exhaustive draw" {
+            if let Some(root) = &self.artifact_root {
+                session.persist_artifacts(root);
+                return Ok(session.view());
+            }
+        }
+        Ok(view)
     }
 }
 
@@ -144,5 +163,54 @@ mod tests {
         assert!(store.submit_action(&handle.game_id, 999).is_err());
 
         assert_eq!(store.get_view(&handle.game_id).unwrap(), handle.view);
+    }
+
+    #[test]
+    fn terminal_submit_writes_local_artifacts_when_root_configured() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut store = LocalGameSessionStore::with_artifact_root(tmp.path().to_path_buf());
+        let handle = store.new_session();
+        let game_id = handle.game_id.clone();
+
+        let mut view = handle.view;
+        while view.phase_label != "Exhaustive draw" {
+            view = store
+                .submit_action(&game_id, view.actions[0].id)
+                .expect("submit action");
+        }
+
+        assert!(view.artifact_status.saved);
+        let replay_path = view.artifact_status.replay_path.as_ref().unwrap();
+        let decision_points_path = view.artifact_status.decision_points_path.as_ref().unwrap();
+        assert!(std::path::Path::new(replay_path).exists());
+        assert!(std::path::Path::new(decision_points_path).exists());
+
+        let replay: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(replay_path).unwrap()).unwrap();
+        let decision_points: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(decision_points_path).unwrap()).unwrap();
+        assert_eq!(replay["finalPhaseLabel"], "Exhaustive draw");
+        assert_eq!(
+            replay["decisionCount"],
+            decision_points["decisionPoints"].as_array().unwrap().len()
+        );
+    }
+
+    #[test]
+    fn terminal_submit_persists_artifacts_idempotently() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut store = LocalGameSessionStore::with_artifact_root(tmp.path().to_path_buf());
+        let handle = store.new_session();
+        let game_id = handle.game_id.clone();
+
+        let mut view = handle.view;
+        while view.phase_label != "Exhaustive draw" {
+            view = store.submit_action(&game_id, view.actions[0].id).unwrap();
+        }
+        let first = view.artifact_status.clone();
+        let second = store.get_view(&game_id).unwrap().artifact_status;
+
+        assert_eq!(first, second);
+        assert!(second.saved);
     }
 }

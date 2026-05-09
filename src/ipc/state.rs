@@ -28,7 +28,9 @@ use crate::history::HistoryStore;
 use crate::local_game::LocalGameSessionStore;
 use crate::logger::Session;
 use crate::schema::{BotStatus, CaptureStatus};
+use crate::util::resolve_dir;
 use std::collections::HashSet;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -157,7 +159,9 @@ impl AppState {
             capture_control: Arc::new(Mutex::new(CaptureControl::default())),
             game_tracker,
             analysis_cache,
-            local_game_sessions: Arc::new(Mutex::new(LocalGameSessionStore::new())),
+            local_game_sessions: Arc::new(Mutex::new(LocalGameSessionStore::with_artifact_root(
+                resolve_dir(Path::new("./history")).join("local-artifacts"),
+            ))),
             history_store,
             history_platform,
             runtime,

@@ -35,7 +35,15 @@
     "recommendations": "Deterministic 推薦占位",
     "recommendation_1": "推薦切牌",
     "recommendation_2": "候選切牌",
-    "recommendation_mock_note": "目前會用 deterministic 生命週期推進到流局；這裡尚未呼叫 CoachWorker。"
+    "recommendation_mock_note": "目前會用 deterministic 生命週期推進到流局；這裡尚未呼叫 CoachWorker。",
+    "artifacts": "本地記錄",
+    "artifact_status": "儲存狀態",
+    "artifact_saved": "已儲存",
+    "artifact_failed": "儲存失敗",
+    "artifact_pending": "等待寫入",
+    "artifact_waiting": "終局後儲存",
+    "replay_path": "Replay",
+    "decision_points_path": "決策點"
   },
   "history": {
     "title": "歷史紀錄",

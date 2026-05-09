@@ -133,6 +133,7 @@ export function LocalTable() {
             onSubmitAction={handleSubmitAction}
           />
           <RecommendationPanel recommendations={view.recommendations} />
+          <ArtifactPanel view={view} />
         </aside>
       </div>
     </div>
@@ -270,6 +271,56 @@ function RecommendationPanel({ recommendations }: { recommendations: LocalGameRe
         ))}
       </CardContent>
     </Card>
+  )
+}
+
+function ArtifactPanel({ view }: { view: LocalGameView }) {
+  const { t } = useTranslation()
+  const { artifactStatus } = view
+  const isTerminal = view.actions.length === 0 || view.phaseLabel === 'Exhaustive draw'
+  return (
+    <Card className="py-0">
+      <CardHeader className="border-b px-3 py-2">
+        <CardTitle className="text-sm">{t('local_table.artifacts')}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-2 p-3 text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">{t('local_table.artifact_status')}</span>
+          <Badge
+            variant={artifactStatus.saved ? 'default' : artifactStatus.errorMessage ? 'destructive' : 'outline'}
+          >
+            {artifactStatus.saved
+              ? t('local_table.artifact_saved')
+              : artifactStatus.errorMessage
+                ? t('local_table.artifact_failed')
+                : isTerminal
+                  ? t('local_table.artifact_pending')
+                  : t('local_table.artifact_waiting')}
+          </Badge>
+        </div>
+        {artifactStatus.errorMessage && (
+          <p className="break-words text-destructive">{artifactStatus.errorMessage}</p>
+        )}
+        {artifactStatus.replayPath && (
+          <PathLine label={t('local_table.replay_path')} value={artifactStatus.replayPath} />
+        )}
+        {artifactStatus.decisionPointsPath && (
+          <PathLine
+            label={t('local_table.decision_points_path')}
+            value={artifactStatus.decisionPointsPath}
+          />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function PathLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <span className="text-muted-foreground">{label}</span>
+      <code className="break-all rounded border bg-muted px-2 py-1 font-mono text-[11px]">{value}</code>
+    </div>
   )
 }
 

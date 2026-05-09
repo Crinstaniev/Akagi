@@ -35,7 +35,15 @@
     "recommendations": "Deterministic 推薦枠",
     "recommendation_1": "推薦打牌",
     "recommendation_2": "候補打牌",
-    "recommendation_mock_note": "deterministic なライフサイクルで流局まで進行します。CoachWorker はまだ呼び出しません。"
+    "recommendation_mock_note": "deterministic なライフサイクルで流局まで進行します。CoachWorker はまだ呼び出しません。",
+    "artifacts": "ローカル記録",
+    "artifact_status": "保存状態",
+    "artifact_saved": "保存済み",
+    "artifact_failed": "保存失敗",
+    "artifact_pending": "書き込み待ち",
+    "artifact_waiting": "終局後に保存",
+    "replay_path": "Replay",
+    "decision_points_path": "Decision points"
   },
   "history": {
     "title": "対局履歴",

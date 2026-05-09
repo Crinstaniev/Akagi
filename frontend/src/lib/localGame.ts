@@ -40,6 +40,13 @@ export type LocalGameRecommendationView = {
   note: string
 }
 
+export type LocalArtifactStatus = {
+  saved: boolean
+  replayPath: string | null
+  decisionPointsPath: string | null
+  errorMessage: string | null
+}
+
 export type LocalGameView = {
   schemaVersion: number
   source: string
@@ -51,6 +58,7 @@ export type LocalGameView = {
   doraIndicators: string[]
   actions: LocalGameActionView[]
   recommendations: LocalGameRecommendationView[]
+  artifactStatus: LocalArtifactStatus
 }
 
 export type LocalGameSessionHandle = {
@@ -149,6 +157,12 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
       note: 'Dev fallback only; not a real AI recommendation.',
     },
   ],
+  artifactStatus: {
+    saved: false,
+    replayPath: null,
+    decisionPointsPath: null,
+    errorMessage: null,
+  },
 }
 
 export async function loadLocalGameView(): Promise<LocalGameLoadResult> {

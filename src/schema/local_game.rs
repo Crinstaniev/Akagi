@@ -28,6 +28,45 @@ pub struct LocalGameView {
     pub dora_indicators: Vec<String>,
     pub actions: Vec<LocalGameActionView>,
     pub recommendations: Vec<LocalGameRecommendationView>,
+    pub artifact_status: LocalArtifactStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalArtifactStatus {
+    pub saved: bool,
+    pub replay_path: Option<String>,
+    pub decision_points_path: Option<String>,
+    pub error_message: Option<String>,
+}
+
+impl LocalArtifactStatus {
+    pub fn pending() -> Self {
+        Self {
+            saved: false,
+            replay_path: None,
+            decision_points_path: None,
+            error_message: None,
+        }
+    }
+
+    pub fn saved(replay_path: String, decision_points_path: String) -> Self {
+        Self {
+            saved: true,
+            replay_path: Some(replay_path),
+            decision_points_path: Some(decision_points_path),
+            error_message: None,
+        }
+    }
+
+    pub fn failed(message: String) -> Self {
+        Self {
+            saved: false,
+            replay_path: None,
+            decision_points_path: None,
+            error_message: Some(message),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

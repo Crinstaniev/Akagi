@@ -1,3 +1,4 @@
+pub mod artifact;
 pub mod host;
 pub mod store;
 

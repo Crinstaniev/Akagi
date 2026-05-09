@@ -1,8 +1,10 @@
+use super::artifact::{write_local_artifacts, LocalDecisionPoint};
 use crate::schema::local_game::{
-    LocalGameActionView, LocalGamePlayerView, LocalGameRecommendationView, LocalGameRoundView,
-    LocalGameView,
+    LocalArtifactStatus, LocalGameActionView, LocalGamePlayerView, LocalGameRecommendationView,
+    LocalGameRoundView, LocalGameView,
 };
 use serde_json::json;
+use std::path::Path;
 
 const RELATION_LABELS: [&str; 4] = ["自家", "下家", "对面", "上家"];
 const WINDS: [&str; 4] = ["E", "S", "W", "N"];
@@ -31,6 +33,41 @@ impl LocalGameSession {
     pub fn submit_action(&mut self, action_id: u32) -> Result<LocalGameView, String> {
         self.state.submit_action(action_id)?;
         Ok(self.view())
+    }
+
+    pub fn persist_artifacts(&mut self, root: &Path) {
+        if !self.state.ended || self.state.artifact_status.saved {
+            return;
+        }
+        let view = self.view();
+        match write_local_artifacts(
+            root,
+            &self.game_id,
+            self.seed,
+            &view,
+            &self.state.decision_points,
+        ) {
+            Ok(paths) => {
+                self.state.artifact_status = LocalArtifactStatus::saved(
+                    paths.replay_path.to_string_lossy().into_owned(),
+                    paths.decision_points_path.to_string_lossy().into_owned(),
+                );
+            }
+            Err(error) => {
+                self.state.artifact_status = LocalArtifactStatus::failed(error.to_string());
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn decision_point_count_for_test(&self) -> usize {
+        self.state.decision_points.len()
+    }
+
+    #[cfg(test)]
+    pub fn force_short_draw_pool_for_test(&mut self, draw_tiles: Vec<String>) {
+        self.state.remaining_tiles = draw_tiles.len() as u32;
+        self.state.draw_tiles = draw_tiles;
     }
 }
 
@@ -62,6 +99,8 @@ struct LocalGameSessionState {
     turn_index: u32,
     actions_enabled: bool,
     ended: bool,
+    decision_points: Vec<LocalDecisionPoint>,
+    artifact_status: LocalArtifactStatus,
 }
 
 impl LocalGameSessionState {
@@ -84,6 +123,8 @@ impl LocalGameSessionState {
             turn_index: 0,
             actions_enabled: true,
             ended: false,
+            decision_points: vec![],
+            artifact_status: LocalArtifactStatus::pending(),
         }
     }
 
@@ -121,6 +162,7 @@ impl LocalGameSessionState {
             dora_indicators: vec![self.dora_indicator.clone()],
             actions,
             recommendations: vec![recommendation],
+            artifact_status: self.artifact_status.clone(),
         }
     }
 
@@ -151,6 +193,12 @@ impl LocalGameSessionState {
             return Err(format!("local game action not found: {action_id}"));
         }
 
+        let before_view = self.view();
+        self.decision_points.push(LocalDecisionPoint::from_view(
+            self.turn_index,
+            &before_view,
+            action,
+        ));
         let tile = self.self_hand_tiles.remove(index);
         self.player_river_tiles[0].push(tile);
         self.advance_lifecycle();

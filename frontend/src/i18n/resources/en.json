@@ -35,7 +35,15 @@
     "recommendations": "Deterministic recommendation placeholder",
     "recommendation_1": "Recommended discard",
     "recommendation_2": "Candidate discard",
-    "recommendation_mock_note": "The lifecycle advances deterministically to exhaustive draw; CoachWorker is not called yet."
+    "recommendation_mock_note": "The lifecycle advances deterministically to exhaustive draw; CoachWorker is not called yet.",
+    "artifacts": "Local records",
+    "artifact_status": "Save status",
+    "artifact_saved": "Saved",
+    "artifact_failed": "Save failed",
+    "artifact_pending": "Pending write",
+    "artifact_waiting": "Saved at end",
+    "replay_path": "Replay",
+    "decision_points_path": "Decision points"
   },
   "history": {
     "title": "Game History",

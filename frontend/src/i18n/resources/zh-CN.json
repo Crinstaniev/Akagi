@@ -35,7 +35,15 @@
     "recommendations": "Deterministic 推荐占位",
     "recommendation_1": "推荐切牌",
     "recommendation_2": "候选切牌",
-    "recommendation_mock_note": "当前会用 deterministic 生命周期推进到流局；这里尚未调用 CoachWorker。"
+    "recommendation_mock_note": "当前会用 deterministic 生命周期推进到流局；这里尚未调用 CoachWorker。",
+    "artifacts": "本地记录",
+    "artifact_status": "保存状态",
+    "artifact_saved": "已保存",
+    "artifact_failed": "保存失败",
+    "artifact_pending": "等待写入",
+    "artifact_waiting": "终局后保存",
+    "replay_path": "Replay",
+    "decision_points_path": "决策点"
   },
   "history": {
     "title": "历史记录",
