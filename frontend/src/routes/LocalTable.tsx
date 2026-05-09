@@ -126,6 +126,7 @@ export function LocalTable() {
         </section>
 
         <aside className="grid content-start gap-4">
+          <EnginePanel view={view} />
           <ActionPanel
             actions={view.actions}
             canSubmit={canSubmitAction}
@@ -138,6 +139,37 @@ export function LocalTable() {
         </aside>
       </div>
     </div>
+  )
+}
+
+function EnginePanel({ view }: { view: LocalGameView }) {
+  const { t } = useTranslation()
+  return (
+    <Card className="py-0">
+      <CardHeader className="border-b px-3 py-2">
+        <CardTitle className="text-sm">{t('local_table.engine')}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-2 p-3 text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">{t('local_table.engine_source')}</span>
+          <Badge variant="secondary">{view.engine.source}</Badge>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">{t('local_table.engine_status')}</span>
+          <Badge variant={view.engine.status === 'terminal' ? 'outline' : 'default'}>
+            {view.engine.status}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {view.engine.capabilities.map((capability) => (
+            <Badge key={capability} variant="outline">
+              {capability}
+            </Badge>
+          ))}
+        </div>
+        <p className="text-muted-foreground">{view.engine.note}</p>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -234,11 +266,14 @@ function ActionPanel({
             key={action.id}
             variant="outline"
             disabled={!canSubmit || !action.enabled || submittingActionId !== null}
-            className="justify-start"
+            className="h-auto justify-start gap-3 py-2"
             onClick={() => onSubmitAction(action.id)}
           >
-            <span>{action.label}</span>
-            <span className="ml-auto text-xs text-muted-foreground">
+            <Badge variant={action.type === 'discard' ? 'secondary' : 'outline'}>
+              {action.type}
+            </Badge>
+            <span className="min-w-0 flex-1 truncate text-left">{action.label}</span>
+            <span className="max-w-32 truncate text-xs text-muted-foreground">
               {submittingActionId === action.id ? t('local_table.submitting_action') : action.hint}
             </span>
           </Button>

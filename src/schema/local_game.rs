@@ -20,6 +20,7 @@ pub struct LocalGameSubmitActionRequest {
 pub struct LocalGameView {
     pub schema_version: u32,
     pub source: String,
+    pub engine: LocalGameEngineMetadata,
     pub phase_label: String,
     pub notice: String,
     pub round: LocalGameRoundView,
@@ -30,6 +31,16 @@ pub struct LocalGameView {
     pub recommendations: Vec<LocalGameRecommendationView>,
     pub artifact_status: LocalArtifactStatus,
     pub review_summary: LocalReviewSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalGameEngineMetadata {
+    pub schema_version: u32,
+    pub source: String,
+    pub status: String,
+    pub capabilities: Vec<String>,
+    pub note: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

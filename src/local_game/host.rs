@@ -1,4 +1,5 @@
 use super::artifact::{write_local_artifacts, LocalDecisionPoint};
+use super::engine::{deterministic_engine_metadata, ACTION_TYPE_DISCARD};
 use super::review::build_local_review_summary;
 use crate::schema::local_game::{
     LocalArtifactStatus, LocalGameActionView, LocalGamePlayerView, LocalGameRecommendationView,
@@ -135,6 +136,7 @@ impl LocalGameSessionState {
         LocalGameView {
             schema_version: 1,
             source: "local_game_host".into(),
+            engine: deterministic_engine_metadata(self.ended),
             phase_label: if self.ended {
                 "Exhaustive draw".into()
             } else if self.turn_index == 0 {
@@ -180,7 +182,7 @@ impl LocalGameSessionState {
         if !action.enabled {
             return Err(format!("local game action is disabled: {action_id}"));
         }
-        if action.action_type != "discard" {
+        if action.action_type != ACTION_TYPE_DISCARD {
             return Err(format!(
                 "unsupported local game action type: {}",
                 action.action_type
@@ -248,7 +250,7 @@ impl LocalGameSessionState {
             .enumerate()
             .map(|(index, tile)| LocalGameActionView {
                 id: (index + 1) as u32,
-                action_type: "discard".into(),
+                action_type: ACTION_TYPE_DISCARD.into(),
                 label: format!("Discard {tile}"),
                 hint: "Submit discard".into(),
                 enabled: self.actions_enabled,
@@ -384,6 +386,12 @@ mod tests {
 
         assert_eq!(session.game_id, "local-test");
         assert_eq!(view.source, "local_game_host");
+        assert_eq!(view.engine.source, "deterministic_stub");
+        assert_eq!(view.engine.status, "active");
+        assert_eq!(
+            view.engine.capabilities,
+            vec![ACTION_TYPE_DISCARD.to_string()]
+        );
         assert_ne!(view.source, "tauri_fixture");
         assert_eq!(view.players.len(), 4);
         assert_eq!(view.self_hand_tiles.len(), 14);
@@ -504,6 +512,7 @@ mod tests {
         let after = session.submit_action(before.actions[0].id).unwrap();
 
         assert_eq!(after.phase_label, "Exhaustive draw");
+        assert_eq!(after.engine.status, "terminal");
         assert_eq!(after.round.remaining_tiles, 0);
         assert!(after.actions.is_empty());
         assert_eq!(after.recommendations[0].status, "unavailable");
@@ -522,6 +531,7 @@ mod tests {
 
         assert!(error.contains("already ended"));
         assert_eq!(session.view(), ended);
+        assert_eq!(session.view().engine.status, "terminal");
     }
 
     #[test]

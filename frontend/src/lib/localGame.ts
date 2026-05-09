@@ -30,6 +30,14 @@ export type LocalGameActionView = {
   mjai?: Record<string, unknown> | null
 }
 
+export type LocalGameEngineMetadata = {
+  schemaVersion: number
+  source: string
+  status: string
+  capabilities: string[]
+  note: string
+}
+
 export type LocalGameRecommendationView = {
   rank: number
   actionId: number | null
@@ -69,6 +77,7 @@ export type LocalReviewSummary = {
 export type LocalGameView = {
   schemaVersion: number
   source: string
+  engine: LocalGameEngineMetadata
   phaseLabel: string
   notice: string
   round: LocalGameRoundView
@@ -96,6 +105,13 @@ export type LocalGameLoadResult = {
 const DEV_FALLBACK_VIEW: LocalGameView = {
   schemaVersion: 1,
   source: 'frontend_dev_fallback',
+  engine: {
+    schemaVersion: 1,
+    source: 'frontend_dev_fallback',
+    status: 'active',
+    capabilities: ['discard'],
+    note: 'Browser fallback only; full RiichiEnv rules are not active.',
+  },
   phaseLabel: 'Dev fallback',
   notice: 'Vite browser fallback only. Tauri desktop uses local_game_new.',
   round: {
@@ -164,7 +180,7 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
       mjai: { type: 'dahai', actor: 0, pai: '5p' },
     },
     { id: 2, type: 'riichi', label: 'Riichi', hint: 'Not wired yet', enabled: false },
-    { id: 3, type: 'skip', label: 'Skip', hint: 'Not wired yet', enabled: false },
+    { id: 3, type: 'pass', label: 'Pass', hint: 'Not wired yet', enabled: false },
   ],
   recommendations: [
     {
