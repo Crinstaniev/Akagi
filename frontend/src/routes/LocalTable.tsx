@@ -55,7 +55,7 @@ export function LocalTable() {
         <div>
           <div className="mb-2 flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{t('local_table.title')}</h1>
-            <Badge variant="secondary">{t('local_table.mock_badge')}</Badge>
+            <Badge variant="secondary">{view.source}</Badge>
             <Badge variant="outline">{view.phaseLabel}</Badge>
             <Badge variant={loadResult.mode === 'tauri' ? 'default' : 'destructive'}>
               {loadResult.mode === 'tauri' ? 'Tauri command' : 'Dev fallback'}

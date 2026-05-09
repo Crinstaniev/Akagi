@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "Local Table",
-    "description": "Static UI skeleton for the local training table. It is not connected to LocalGameHost, Tauri commands, or real AI recommendations yet.",
+    "description": "The local training table now reads an initial local session view through Tauri commands. Tile clicks and real AI recommendations come later.",
     "mock_badge": "Mock data",
     "seat_self": "Self",
     "seat_shimocha": "Shimocha",
@@ -21,7 +21,7 @@
     "no_melds": "No melds",
     "self_hand": "Self hand",
     "self_hand_hint": "Placeholder hand; tile click comes later",
-    "center_label": "Local Table Skeleton",
+    "center_label": "Local Session View",
     "remaining_tiles": "{{count}} tiles left",
     "honba": "Honba",
     "kyotaku": "Riichi sticks",

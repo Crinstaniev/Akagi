@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "ローカル卓",
-    "description": "ローカルトレーニング卓の静的 UI スケルトンです。まだ LocalGameHost、Tauri command、実際の AI 推薦には接続していません。",
+    "description": "ローカルトレーニング卓は Tauri command でローカル session の初期ビューを読み込みます。打牌クリックと実際の AI 推薦は後続で接続します。",
     "mock_badge": "Mock データ",
     "seat_self": "自家",
     "seat_shimocha": "下家",
@@ -21,7 +21,7 @@
     "no_melds": "副露なし",
     "self_hand": "自家手牌",
     "self_hand_hint": "プレースホルダー手牌。打牌クリックは後続で接続します",
-    "center_label": "Local Table Skeleton",
+    "center_label": "Local Session View",
     "remaining_tiles": "残り {{count}} 枚",
     "honba": "本場",
     "kyotaku": "供託",

@@ -18,6 +18,7 @@ use crate::ipc::capture_supervisor::{
     restart_capture as restart_capture_inner, spawn_capture_supervisor,
 };
 use crate::ipc::state::AppState;
+use crate::local_game::LocalGameSessionStore;
 use crate::schema::{
     BotInfo, BotSettings, GameRecord, HistoryEvent, HistoryEventLog, HistoryFilter, HoraScoreInfo,
     InspectorEntry, LocalGameSessionHandle, LocalGameView, LogEntry, LogSessionInfo, Notification,
@@ -26,7 +27,9 @@ use crate::schema::{
 use crate::util::resolve_dir;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::State;
+use tokio::sync::Mutex;
 
 /// Returns `true` exactly once per process the first time `bot_enabled`
 /// is observed as `true` here. Side-effect on success: flips `flag`
@@ -66,14 +69,31 @@ fn entry_to_info(e: &BotEntry) -> BotInfo {
 
 type CmdResult<T> = Result<T, String>;
 
-#[tauri::command]
-pub async fn local_game_new() -> CmdResult<LocalGameSessionHandle> {
-    Ok(crate::schema::local_game::local_game_session_fixture())
+async fn create_local_game_session(
+    store: &Arc<Mutex<LocalGameSessionStore>>,
+) -> CmdResult<LocalGameSessionHandle> {
+    Ok(store.lock().await.new_session())
+}
+
+async fn read_local_game_view(
+    store: &Arc<Mutex<LocalGameSessionStore>>,
+    game_id: Option<String>,
+) -> CmdResult<LocalGameView> {
+    let game_id = game_id.ok_or_else(|| "gameId is required".to_string())?;
+    store.lock().await.get_view(&game_id)
 }
 
 #[tauri::command]
-pub async fn local_game_get_view(_game_id: Option<String>) -> CmdResult<LocalGameView> {
-    Ok(crate::schema::local_game::local_game_view_fixture())
+pub async fn local_game_new(state: State<'_, AppState>) -> CmdResult<LocalGameSessionHandle> {
+    create_local_game_session(&state.local_game_sessions).await
+}
+
+#[tauri::command]
+pub async fn local_game_get_view(
+    game_id: Option<String>,
+    state: State<'_, AppState>,
+) -> CmdResult<LocalGameView> {
+    read_local_game_view(&state.local_game_sessions, game_id).await
 }
 
 #[tauri::command]
@@ -1282,25 +1302,38 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn local_game_new_returns_fixture_handle() {
-        let handle = local_game_new().await.unwrap();
+    async fn local_game_new_returns_real_session_view() {
+        let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
+        let handle = create_local_game_session(&store).await.unwrap();
 
-        assert_eq!(handle.game_id, "local-fixture-001");
+        assert!(handle.game_id.starts_with("local-"));
         assert_eq!(handle.view.schema_version, 1);
-        assert_eq!(handle.view.source, "tauri_fixture");
+        assert_eq!(handle.view.source, "local_game_host");
         assert_eq!(handle.view.players.len(), 4);
     }
 
     #[tokio::test]
-    async fn local_game_get_view_returns_fixture_view() {
-        let view = local_game_get_view(Some("anything".into())).await.unwrap();
+    async fn local_game_get_view_returns_session_view() {
+        let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
+        let handle = create_local_game_session(&store).await.unwrap();
+        let view = read_local_game_view(&store, Some(handle.game_id)).await.unwrap();
 
         assert_eq!(view.schema_version, 1);
-        assert_eq!(view.source, "tauri_fixture");
+        assert_eq!(view.source, "local_game_host");
         assert_eq!(
             view.players.iter().filter(|player| player.is_self).count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn local_game_get_view_rejects_unknown_game_id() {
+        let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
+
+        assert!(read_local_game_view(&store, None).await.is_err());
+        assert!(read_local_game_view(&store, Some("missing".into()))
+            .await
+            .is_err());
     }
 
     /// Regression: the first-run wizard ships a fresh-install Akagi with

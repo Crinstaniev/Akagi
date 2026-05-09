@@ -10,6 +10,7 @@ pub mod game_state;
 pub mod history;
 pub mod inspector;
 pub mod ipc;
+pub mod local_game;
 pub mod logger;
 pub mod platform;
 pub mod proxy;
@@ -314,4 +315,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

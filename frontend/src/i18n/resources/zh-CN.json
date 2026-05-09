@@ -10,7 +10,7 @@
   },
   "local_table": {
     "title": "本地牌桌",
-    "description": "静态 UI 骨架，用于验证本地训练牌桌布局；尚未接入真实 LocalGameHost、Tauri command 或 AI 推荐。",
+    "description": "本地训练牌桌已通过 Tauri command 读取本地 session 初始视图；点击出牌和真实 AI 推荐后续接入。",
     "mock_badge": "Mock 数据",
     "seat_self": "自家",
     "seat_shimocha": "下家",
@@ -21,7 +21,7 @@
     "no_melds": "无副露",
     "self_hand": "自家手牌",
     "self_hand_hint": "占位手牌，点击出牌后续接入",
-    "center_label": "Local Table Skeleton",
+    "center_label": "Local Session View",
     "remaining_tiles": "剩余 {{count}} 张",
     "honba": "本场",
     "kyotaku": "供托",

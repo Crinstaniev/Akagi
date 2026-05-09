@@ -23,8 +23,9 @@ use crate::event_bus::{
     AnalysisBus, BotResponseBus, BotStatusBus, CaptureStatusBus, HistoryBus, MjaiBus, NotifyBus,
 };
 use crate::game_state::GameTracker;
-use crate::history::HistoryStore;
 use crate::history::recorder::SharedPlatform;
+use crate::history::HistoryStore;
+use crate::local_game::LocalGameSessionStore;
 use crate::logger::Session;
 use crate::schema::{BotStatus, CaptureStatus};
 use std::collections::HashSet;
@@ -83,6 +84,10 @@ pub struct AppState {
     /// Latest analysis result, populated by the analysis runner. Read by
     /// the `get_analysis` Tauri command for one-shot queries.
     pub analysis_cache: AnalysisCache,
+    /// In-memory local training table sessions created by Local Table
+    /// Tauri commands. These sessions are process-local and intentionally
+    /// not persisted across app restarts.
+    pub local_game_sessions: Arc<Mutex<LocalGameSessionStore>>,
     /// Persistent game-history store. Written by the recorder task,
     /// read by `list_game_history` / `get_game_history_*` IPC commands.
     pub history_store: Arc<HistoryStore>,
@@ -152,6 +157,7 @@ impl AppState {
             capture_control: Arc::new(Mutex::new(CaptureControl::default())),
             game_tracker,
             analysis_cache,
+            local_game_sessions: Arc::new(Mutex::new(LocalGameSessionStore::new())),
             history_store,
             history_platform,
             runtime,
