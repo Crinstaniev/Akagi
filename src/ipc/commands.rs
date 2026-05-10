@@ -104,6 +104,28 @@ pub struct LocalMortalReadinessResult {
     pub fallback_count: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMortalQualitySummary {
+    pub games: u32,
+    pub seed_start: u64,
+    pub total_worker_decisions: u32,
+    pub total_fallbacks: u32,
+    pub fallback_rate: f64,
+    pub games_with_fallback: u32,
+    pub max_fallback_rate: f64,
+    pub max_games_with_fallback: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMortalQualityResult {
+    pub status: String,
+    #[serde(default)]
+    pub reasons: Vec<String>,
+    pub summary: LocalMortalQualitySummary,
+}
+
 fn mortal_env_command_args(model_dir: &str) -> Vec<String> {
     [
         "run",
@@ -140,6 +162,24 @@ fn mortal_readiness_command_args(model_dir: &str) -> Vec<String> {
     .collect()
 }
 
+fn mortal_quality_command_args(worker_command: &str) -> Vec<String> {
+    [
+        "run",
+        "--project",
+        "backend",
+        "riichi-ai-trainer",
+        "local-quality-smoke",
+        "--games",
+        "1",
+        "--ai-worker-cmd",
+        worker_command,
+        "--json",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
+
 fn parse_mortal_command_result(stdout: &[u8]) -> CmdResult<MortalCommandResult> {
     if stdout.is_empty() {
         return Err("mortal-env stdout is empty".into());
@@ -154,6 +194,14 @@ fn parse_mortal_readiness_result(stdout: &[u8]) -> CmdResult<LocalMortalReadines
     }
     serde_json::from_slice(stdout)
         .map_err(|error| format!("mortal-local-play-smoke JSON parse failed: {error}"))
+}
+
+fn parse_mortal_quality_result(stdout: &[u8]) -> CmdResult<LocalMortalQualityResult> {
+    if stdout.is_empty() {
+        return Err("local-quality-smoke stdout is empty".into());
+    }
+    serde_json::from_slice(stdout)
+        .map_err(|error| format!("local-quality-smoke JSON parse failed: {error}"))
 }
 
 fn mortal_env_output_to_result(
@@ -184,6 +232,21 @@ fn mortal_readiness_output_to_result(
         ));
     }
     parse_mortal_readiness_result(stdout)
+}
+
+fn mortal_quality_output_to_result(
+    success: bool,
+    status_label: &str,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> CmdResult<LocalMortalQualityResult> {
+    if !success {
+        let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+        return Err(format!(
+            "local-quality-smoke exited with status {status_label}; {stderr}"
+        ));
+    }
+    parse_mortal_quality_result(stdout)
 }
 
 #[tauri::command]
@@ -245,6 +308,60 @@ pub async fn local_game_check_mortal_readiness(
         &output.status.to_string(),
         &output.stdout,
         &output.stderr,
+    )
+}
+
+#[tauri::command]
+pub async fn local_game_check_mortal_single_game_quality(
+    model_dir: String,
+) -> CmdResult<LocalMortalQualityResult> {
+    let model_dir = model_dir.trim().to_string();
+    if model_dir.is_empty() {
+        return Err("modelDir is required".into());
+    }
+
+    let repo_root = find_repo_root().ok_or_else(|| {
+        "could not locate repository root with backend/pyproject.toml".to_string()
+    })?;
+    let env_args = mortal_env_command_args(&model_dir);
+    let env_output = tokio::task::spawn_blocking({
+        let repo_root = repo_root.clone();
+        move || {
+            Command::new("uv")
+                .args(env_args)
+                .current_dir(repo_root)
+                .output()
+        }
+    })
+    .await
+    .map_err(|error| format!("mortal-env join error: {error}"))?
+    .map_err(|error| format!("failed to run mortal-env: {error}"))?;
+    let env_result = mortal_env_output_to_result(
+        env_output.status.success(),
+        &env_output.status.to_string(),
+        &env_output.stdout,
+        &env_output.stderr,
+    )?;
+    let worker_command = env_result
+        .worker_command
+        .ok_or_else(|| "mortal-env returned no workerCommand".to_string())?;
+
+    let quality_args = mortal_quality_command_args(&worker_command);
+    let quality_output = tokio::task::spawn_blocking(move || {
+        Command::new("uv")
+            .args(quality_args)
+            .current_dir(repo_root)
+            .output()
+    })
+    .await
+    .map_err(|error| format!("local-quality-smoke join error: {error}"))?
+    .map_err(|error| format!("failed to run local-quality-smoke: {error}"))?;
+
+    mortal_quality_output_to_result(
+        quality_output.status.success(),
+        &quality_output.status.to_string(),
+        &quality_output.stdout,
+        &quality_output.stderr,
     )
 }
 
@@ -1446,6 +1563,7 @@ macro_rules! ipc_handlers {
             $crate::ipc::commands::local_game_submit_action,
             $crate::ipc::commands::local_game_generate_mortal_command,
             $crate::ipc::commands::local_game_check_mortal_readiness,
+            $crate::ipc::commands::local_game_check_mortal_single_game_quality,
             $crate::ipc::commands::get_config,
             $crate::ipc::commands::update_config,
             $crate::ipc::commands::list_bots,
@@ -1685,6 +1803,60 @@ mod tests {
         assert!(args.contains(&"mortal-local-play-smoke".to_string()));
         assert!(args.contains(&"--worker-command-style".to_string()));
         assert!(args.contains(&"uv".to_string()));
+        assert!(args.contains(&"--json".to_string()));
+    }
+
+    #[test]
+    fn mortal_quality_result_extracts_single_game_summary() {
+        let raw = br#"{
+            "status": "ready",
+            "reasons": [],
+            "summary": {
+                "games": 1,
+                "seedStart": 20260514,
+                "totalWorkerDecisions": 42,
+                "totalFallbacks": 1,
+                "fallbackRate": 0.0238,
+                "gamesWithFallback": 1,
+                "maxFallbackRate": 0.03,
+                "maxGamesWithFallback": 1
+            }
+        }"#;
+
+        let result = parse_mortal_quality_result(raw).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.reasons, Vec::<String>::new());
+        assert_eq!(result.summary.games, 1);
+        assert_eq!(result.summary.total_worker_decisions, 42);
+        assert_eq!(result.summary.total_fallbacks, 1);
+    }
+
+    #[test]
+    fn mortal_quality_result_rejects_invalid_json() {
+        let error = parse_mortal_quality_result(b"not json").unwrap_err();
+
+        assert!(error.contains("local-quality-smoke JSON parse failed"));
+    }
+
+    #[test]
+    fn mortal_quality_output_reports_non_zero_exit() {
+        let error = mortal_quality_output_to_result(false, "exit status: 2", b"", b"bad worker")
+            .unwrap_err();
+
+        assert!(error.contains("local-quality-smoke exited with status exit status: 2"));
+        assert!(error.contains("bad worker"));
+    }
+
+    #[test]
+    fn mortal_quality_command_args_use_local_quality_smoke() {
+        let args = mortal_quality_command_args("uv run --project backend python -m worker");
+
+        assert_eq!(args[0], "run");
+        assert_eq!(args[1], "--project");
+        assert!(args.contains(&"local-quality-smoke".to_string()));
+        assert!(args.contains(&"--ai-worker-cmd".to_string()));
+        assert!(args.contains(&"--games".to_string()));
         assert!(args.contains(&"--json".to_string()));
     }
 

@@ -138,6 +138,21 @@ export type LocalMortalReadinessResult = {
   fallbackCount: number
 }
 
+export type LocalMortalQualityResult = {
+  status: string
+  reasons: string[]
+  summary: {
+    games: number
+    seedStart: number
+    totalWorkerDecisions: number
+    totalFallbacks: number
+    fallbackRate: number
+    gamesWithFallback: number
+    maxFallbackRate: number
+    maxGamesWithFallback: number
+  }
+}
+
 export type AppConfig = {
   general: { language: string; first_run_completed: boolean }
   logging: { dir: string; level: string; all_level: string }

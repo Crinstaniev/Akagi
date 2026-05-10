@@ -42,6 +42,7 @@ import type {
   CaptureMode,
   DetectedBrowser,
   LocalMortalCommandResult,
+  LocalMortalQualityResult,
   LocalMortalReadinessResult,
   PlatformKind,
 } from '@/types'
@@ -436,6 +437,9 @@ function LocalTableCard({
   const [checkingReadiness, setCheckingReadiness] = useState(false)
   const [readinessResult, setReadinessResult] = useState<LocalMortalReadinessResult | null>(null)
   const [readinessError, setReadinessError] = useState<string | null>(null)
+  const [checkingQuality, setCheckingQuality] = useState(false)
+  const [qualityResult, setQualityResult] = useState<LocalMortalQualityResult | null>(null)
+  const [qualityError, setQualityError] = useState<string | null>(null)
 
   async function generateMortalCommand() {
     const modelDir = localGame.mortal_model_dir.trim()
@@ -482,6 +486,30 @@ function LocalTableCard({
     }
   }
 
+  async function checkMortalSingleGameQuality() {
+    const modelDir = localGame.mortal_model_dir.trim()
+    setQualityResult(null)
+    setQualityError(null)
+    if (!modelDir) {
+      setQualityError(t('settings.local_table.mortal_model_dir_required'))
+      return
+    }
+    setCheckingQuality(true)
+    try {
+      const result = await invoke<LocalMortalQualityResult>(
+        'local_game_check_mortal_single_game_quality',
+        {
+          modelDir,
+        },
+      )
+      setQualityResult(result)
+    } catch (error) {
+      setQualityError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCheckingQuality(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -492,7 +520,7 @@ function LocalTableCard({
           label={t('settings.local_table.mortal_model_dir')}
           hint={t('settings.local_table.mortal_model_dir_hint')}
         >
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
             <Input
               value={localGame.mortal_model_dir}
               onChange={(e) => setLocalGame({ mortal_model_dir: e.target.value })}
@@ -518,6 +546,16 @@ function LocalTableCard({
                 ? t('settings.local_table.checking_mortal_readiness')
                 : t('settings.local_table.check_mortal_readiness')}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={checkMortalSingleGameQuality}
+              disabled={checkingQuality}
+            >
+              {checkingQuality
+                ? t('settings.local_table.checking_single_game_quality')
+                : t('settings.local_table.check_single_game_quality')}
+            </Button>
           </div>
         </Field>
         {(generatorError || generatorResult) && (
@@ -537,6 +575,42 @@ function LocalTableCard({
                 {generatorResult.reasons.length > 0 && (
                   <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                     {generatorResult.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
+        {(qualityError || qualityResult) && (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+            {qualityError ? (
+              <p className="text-destructive">{qualityError}</p>
+            ) : qualityResult ? (
+              <div className="grid gap-1">
+                <p className={qualityResult.status === 'ready' ? 'text-emerald-700' : 'text-amber-700'}>
+                  {qualityResult.status === 'ready'
+                    ? t('settings.local_table.quality_ready')
+                    : t('settings.local_table.quality_unavailable')}
+                  {' · '}
+                  {t('settings.local_table.quality_fallback_rate', {
+                    rate: qualityResult.summary.fallbackRate.toFixed(4),
+                  })}
+                  {' · '}
+                  {t('settings.local_table.quality_games_with_fallback', {
+                    count: qualityResult.summary.gamesWithFallback,
+                  })}
+                </p>
+                <p className="text-muted-foreground">
+                  {t('settings.local_table.quality_thresholds', {
+                    rate: qualityResult.summary.maxFallbackRate.toFixed(4),
+                    count: qualityResult.summary.maxGamesWithFallback,
+                  })}
+                </p>
+                {qualityResult.reasons.length > 0 && (
+                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                    {qualityResult.reasons.map((reason) => (
                       <li key={reason}>{reason}</li>
                     ))}
                   </ul>
