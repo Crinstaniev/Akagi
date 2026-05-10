@@ -363,6 +363,13 @@
     "save_and_leave": "儲存並離開",
     "local_table": {
       "title": "本地牌桌",
+      "mortal_model_dir": "Mortal 模型目錄",
+      "mortal_model_dir_hint": "僅用於產生 worker 命令；相對路徑會從倉庫根目錄解析。",
+      "mortal_model_dir_required": "請先填寫 Mortal 模型目錄。",
+      "generate_worker_cmd": "產生 worker 命令",
+      "generating_worker_cmd": "產生中…",
+      "diagnostic_ready": "已產生 worker 命令",
+      "diagnostic_unavailable": "診斷不可用",
       "ai_worker_cmd": "AI worker 命令",
       "ai_worker_cmd_hint": "用於新建本地牌桌 session。留空時繼續使用 RIICHI_AI_TRAINER_AI_WORKER_CMD 或 RandomAgent fallback。",
       "ai_worker_timeout_ms": "AI worker 逾時 (ms)",

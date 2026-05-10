@@ -37,7 +37,13 @@ import {
   isKnownDefaultStartUrl,
   platformInfo,
 } from '@/lib/platforms'
-import type { AppConfig, CaptureMode, DetectedBrowser, PlatformKind } from '@/types'
+import type {
+  AppConfig,
+  CaptureMode,
+  DetectedBrowser,
+  LocalMortalCommandResult,
+  PlatformKind,
+} from '@/types'
 
 export function Settings() {
   const { t } = useTranslation()
@@ -415,10 +421,38 @@ function LocalTableCard({
   const localGame = draft.local_game ?? {
     ai_worker_cmd: '',
     ai_worker_timeout_ms: null,
+    mortal_model_dir: '',
   }
   const setLocalGame = (patch: Partial<typeof localGame>) =>
     setDraft({ ...draft, local_game: { ...localGame, ...patch } })
   const timeoutValue = localGame.ai_worker_timeout_ms ?? ''
+  const [generating, setGenerating] = useState(false)
+  const [generatorResult, setGeneratorResult] = useState<LocalMortalCommandResult | null>(null)
+  const [generatorError, setGeneratorError] = useState<string | null>(null)
+
+  async function generateMortalCommand() {
+    const modelDir = localGame.mortal_model_dir.trim()
+    setGeneratorResult(null)
+    setGeneratorError(null)
+    if (!modelDir) {
+      setGeneratorError(t('settings.local_table.mortal_model_dir_required'))
+      return
+    }
+    setGenerating(true)
+    try {
+      const result = await invoke<LocalMortalCommandResult>('local_game_generate_mortal_command', {
+        modelDir,
+      })
+      setGeneratorResult(result)
+      if (result.workerCommand) {
+        setLocalGame({ ai_worker_cmd: result.workerCommand })
+      }
+    } catch (error) {
+      setGeneratorError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   return (
     <Card>
@@ -426,6 +460,53 @@ function LocalTableCard({
         <CardTitle>{t('settings.local_table.title')}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <Field
+          label={t('settings.local_table.mortal_model_dir')}
+          hint={t('settings.local_table.mortal_model_dir_hint')}
+        >
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              value={localGame.mortal_model_dir}
+              onChange={(e) => setLocalGame({ mortal_model_dir: e.target.value })}
+              placeholder=".local/models/mortal/voidshine-298k"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={generateMortalCommand}
+              disabled={generating}
+            >
+              {generating
+                ? t('settings.local_table.generating_worker_cmd')
+                : t('settings.local_table.generate_worker_cmd')}
+            </Button>
+          </div>
+        </Field>
+        {(generatorError || generatorResult) && (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+            {generatorError ? (
+              <p className="text-destructive">{generatorError}</p>
+            ) : generatorResult ? (
+              <div className="grid gap-1">
+                <p className={generatorResult.workerCommand ? 'text-emerald-700' : 'text-amber-700'}>
+                  {generatorResult.workerCommand
+                    ? t('settings.local_table.diagnostic_ready')
+                    : t('settings.local_table.diagnostic_unavailable')}
+                  {' · '}
+                  {generatorResult.status}
+                  {generatorResult.modelId ? ` · ${generatorResult.modelId}` : ''}
+                </p>
+                {generatorResult.reasons.length > 0 && (
+                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                    {generatorResult.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
         <Field
           label={t('settings.local_table.ai_worker_cmd')}
           hint={t('settings.local_table.ai_worker_cmd_hint')}
