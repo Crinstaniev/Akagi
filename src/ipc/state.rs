@@ -25,6 +25,7 @@ use crate::event_bus::{
 use crate::game_state::GameTracker;
 use crate::history::recorder::SharedPlatform;
 use crate::history::HistoryStore;
+use crate::local_game::backend_session::BackendLocalSessionConfig;
 use crate::local_game::LocalGameSessionStore;
 use crate::logger::Session;
 use crate::schema::{BotStatus, CaptureStatus};
@@ -144,6 +145,7 @@ impl AppState {
         history_platform: SharedPlatform,
         runtime: Option<PythonRuntime>,
     ) -> Self {
+        let local_game_config = config.local_game.clone();
         Self {
             config: Arc::new(RwLock::new(config)),
             config_path: Arc::new(config_path),
@@ -162,6 +164,7 @@ impl AppState {
             local_game_sessions: Arc::new(Mutex::new(
                 LocalGameSessionStore::with_artifact_root_and_backend_loader(
                     resolve_dir(Path::new("./history")).join("local-artifacts"),
+                    BackendLocalSessionConfig::from(local_game_config),
                 ),
             )),
             history_store,

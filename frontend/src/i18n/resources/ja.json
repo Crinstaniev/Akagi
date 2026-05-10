@@ -361,6 +361,13 @@
     "unsaved_title": "未保存の変更",
     "unsaved_desc": "未保存の設定変更があります。保存して離れる、変更を破棄する、またはこのページに留まるか選択してください。",
     "save_and_leave": "保存して離れる",
+    "local_table": {
+      "title": "ローカル卓",
+      "ai_worker_cmd": "AI worker コマンド",
+      "ai_worker_cmd_hint": "新しいローカル卓セッションに使用します。空欄なら RIICHI_AI_TRAINER_AI_WORKER_CMD または RandomAgent fallback を使います。",
+      "ai_worker_timeout_ms": "AI worker タイムアウト (ms)",
+      "ai_worker_timeout_ms_hint": "空欄なら backend のデフォルトタイムアウトを使います。"
+    },
     "autoplay": {
       "title": "自動操作",
       "enable": "自動操作を有効化",

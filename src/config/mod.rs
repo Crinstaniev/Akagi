@@ -2,6 +2,7 @@ mod autoplay;
 mod bot;
 mod capture;
 mod general;
+mod local_game;
 mod logging;
 mod platform;
 mod proxy;
@@ -10,6 +11,7 @@ pub use autoplay::{AutoplayConfig, MajsoulAutoplayConfig};
 pub use bot::BotConfig;
 pub use capture::{CaptureConfig, CaptureMode, ChromiumConfig};
 pub use general::GeneralConfig;
+pub use local_game::LocalGameConfig;
 pub use logging::LoggingConfig;
 pub use platform::{Platform, PlatformConfig};
 pub use proxy::ProxyConfig;
@@ -27,6 +29,7 @@ pub struct AppConfig {
     pub bot: BotConfig,
     pub capture: CaptureConfig,
     pub autoplay: AutoplayConfig,
+    pub local_game: LocalGameConfig,
 }
 
 enum ResolvedPath {

@@ -361,6 +361,13 @@
     "unsaved_title": "尚未儲存的變更",
     "unsaved_desc": "你有尚未儲存的設定變更。請選擇儲存後離開、放棄變更，或留在此頁繼續編輯。",
     "save_and_leave": "儲存並離開",
+    "local_table": {
+      "title": "本地牌桌",
+      "ai_worker_cmd": "AI worker 命令",
+      "ai_worker_cmd_hint": "用於新建本地牌桌 session。留空時繼續使用 RIICHI_AI_TRAINER_AI_WORKER_CMD 或 RandomAgent fallback。",
+      "ai_worker_timeout_ms": "AI worker 逾時 (ms)",
+      "ai_worker_timeout_ms_hint": "留空時使用 backend 預設逾時。"
+    },
     "autoplay": {
       "title": "自動打牌",
       "enable": "啟用自動打牌",
