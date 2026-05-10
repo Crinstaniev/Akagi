@@ -19,6 +19,7 @@ use crate::ipc::capture_supervisor::{
 };
 use crate::ipc::state::AppState;
 use crate::local_game::backend_session::BackendLocalSessionConfig;
+use crate::local_game::backend_view::find_repo_root;
 use crate::local_game::LocalGameSessionStore;
 use crate::schema::{
     BotInfo, BotSettings, GameRecord, HistoryEvent, HistoryEventLog, HistoryFilter, HoraScoreInfo,
@@ -26,8 +27,10 @@ use crate::schema::{
     ReadInspectorRequest, ReadInspectorResponse, ReadLogRequest, ReadLogResponse, Snapshot,
 };
 use crate::util::resolve_dir;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -69,6 +72,92 @@ fn entry_to_info(e: &BotEntry) -> BotInfo {
 }
 
 type CmdResult<T> = Result<T, String>;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MortalCommandResult {
+    pub status: String,
+    #[serde(default)]
+    pub reasons: Vec<String>,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub model_dir: Option<String>,
+    #[serde(default)]
+    pub worker_command: Option<String>,
+}
+
+fn mortal_env_command_args(model_dir: &str) -> Vec<String> {
+    [
+        "run",
+        "--project",
+        "backend",
+        "riichi-ai-trainer",
+        "mortal-env",
+        "--model-dir",
+        model_dir,
+        "--worker-command-style",
+        "uv",
+        "--json",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
+
+fn parse_mortal_command_result(stdout: &[u8]) -> CmdResult<MortalCommandResult> {
+    if stdout.is_empty() {
+        return Err("mortal-env stdout is empty".into());
+    }
+    serde_json::from_slice(stdout)
+        .map_err(|error| format!("mortal-env JSON parse failed: {error}"))
+}
+
+fn mortal_env_output_to_result(
+    success: bool,
+    status_label: &str,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> CmdResult<MortalCommandResult> {
+    if !success {
+        let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+        return Err(format!(
+            "mortal-env exited with status {status_label}; {stderr}"
+        ));
+    }
+    parse_mortal_command_result(stdout)
+}
+
+#[tauri::command]
+pub async fn local_game_generate_mortal_command(
+    model_dir: String,
+) -> CmdResult<MortalCommandResult> {
+    let model_dir = model_dir.trim().to_string();
+    if model_dir.is_empty() {
+        return Err("modelDir is required".into());
+    }
+
+    let repo_root = find_repo_root().ok_or_else(|| {
+        "could not locate repository root with backend/pyproject.toml".to_string()
+    })?;
+    let args = mortal_env_command_args(&model_dir);
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new("uv")
+            .args(args)
+            .current_dir(repo_root)
+            .output()
+    })
+    .await
+    .map_err(|error| format!("mortal-env join error: {error}"))?
+    .map_err(|error| format!("failed to run mortal-env: {error}"))?;
+
+    mortal_env_output_to_result(
+        output.status.success(),
+        &output.status.to_string(),
+        &output.stdout,
+        &output.stderr,
+    )
+}
 
 async fn create_local_game_session(
     store: &Arc<Mutex<LocalGameSessionStore>>,
@@ -1266,6 +1355,7 @@ macro_rules! ipc_handlers {
             $crate::ipc::commands::local_game_new,
             $crate::ipc::commands::local_game_get_view,
             $crate::ipc::commands::local_game_submit_action,
+            $crate::ipc::commands::local_game_generate_mortal_command,
             $crate::ipc::commands::get_config,
             $crate::ipc::commands::update_config,
             $crate::ipc::commands::list_bots,
@@ -1398,6 +1488,59 @@ mod tests {
         BackendLocalSessionConfig::default()
     }
 
+    #[test]
+    fn mortal_command_result_extracts_worker_command() {
+        let raw = br#"{
+            "status": "ready",
+            "reasons": [],
+            "modelId": "voidshine-298k",
+            "modelDir": ".local/models/mortal/voidshine-298k",
+            "workerCommand": "uv run --project backend python -m riichi_ai_trainer.mortal_adapter --serve"
+        }"#;
+
+        let result = parse_mortal_command_result(raw).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.reasons, Vec::<String>::new());
+        assert_eq!(result.model_id.as_deref(), Some("voidshine-298k"));
+        assert_eq!(
+            result.model_dir.as_deref(),
+            Some(".local/models/mortal/voidshine-298k")
+        );
+        assert_eq!(
+            result.worker_command.as_deref(),
+            Some("uv run --project backend python -m riichi_ai_trainer.mortal_adapter --serve")
+        );
+    }
+
+    #[test]
+    fn mortal_command_result_rejects_invalid_json() {
+        let error = parse_mortal_command_result(b"not json").unwrap_err();
+
+        assert!(error.contains("mortal-env JSON parse failed"));
+    }
+
+    #[test]
+    fn mortal_env_output_reports_non_zero_exit() {
+        let error = mortal_env_output_to_result(false, "exit status: 2", b"", b"missing model")
+            .unwrap_err();
+
+        assert!(error.contains("mortal-env exited with status exit status: 2"));
+        assert!(error.contains("missing model"));
+    }
+
+    #[test]
+    fn mortal_env_command_args_use_uv_worker_style() {
+        let args = mortal_env_command_args(".local/models/mortal/voidshine-298k");
+
+        assert_eq!(args[0], "run");
+        assert_eq!(args[1], "--project");
+        assert!(args.contains(&"mortal-env".to_string()));
+        assert!(args.contains(&"--worker-command-style".to_string()));
+        assert!(args.contains(&"uv".to_string()));
+        assert!(args.contains(&"--json".to_string()));
+    }
+
     fn command_backend_session_starter(
         _seed: u64,
         _config: BackendLocalSessionConfig,
@@ -1449,6 +1592,7 @@ mod tests {
         cfg.proxy.addr = "127.0.0.1:9999".into();
         cfg.local_game.ai_worker_cmd = "uv run worker".into();
         cfg.local_game.ai_worker_timeout_ms = Some(30000);
+        cfg.local_game.mortal_model_dir = ".local/models/mortal/voidshine-298k".into();
 
         persist_config(&cfg, &path).unwrap();
 
@@ -1459,6 +1603,25 @@ mod tests {
         assert_eq!(back.proxy.addr, "127.0.0.1:9999");
         assert_eq!(back.local_game.ai_worker_cmd, "uv run worker");
         assert_eq!(back.local_game.ai_worker_timeout_ms, Some(30000));
+        assert_eq!(
+            back.local_game.mortal_model_dir,
+            ".local/models/mortal/voidshine-298k"
+        );
+    }
+
+    #[test]
+    fn local_game_config_defaults_missing_mortal_model_dir() {
+        let body = r#"
+            [local_game]
+            ai_worker_cmd = "uv run worker"
+            ai_worker_timeout_ms = 30000
+        "#;
+
+        let cfg: AppConfig = toml::from_str(body).unwrap();
+
+        assert_eq!(cfg.local_game.ai_worker_cmd, "uv run worker");
+        assert_eq!(cfg.local_game.ai_worker_timeout_ms, Some(30000));
+        assert_eq!(cfg.local_game.mortal_model_dir, "");
     }
 
     #[tokio::test]

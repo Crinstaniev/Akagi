@@ -363,6 +363,13 @@
     "save_and_leave": "Save & leave",
     "local_table": {
       "title": "Local Table",
+      "mortal_model_dir": "Mortal model directory",
+      "mortal_model_dir_hint": "Used only to generate the worker command. Relative paths are resolved from the repository root.",
+      "mortal_model_dir_required": "Enter a Mortal model directory first.",
+      "generate_worker_cmd": "Generate worker command",
+      "generating_worker_cmd": "Generating…",
+      "diagnostic_ready": "Worker command generated",
+      "diagnostic_unavailable": "Diagnostic unavailable",
       "ai_worker_cmd": "AI worker command",
       "ai_worker_cmd_hint": "Used for new Local Table sessions. Leave blank to use RIICHI_AI_TRAINER_AI_WORKER_CMD or RandomAgent fallback.",
       "ai_worker_timeout_ms": "AI worker timeout (ms)",

@@ -363,6 +363,13 @@
     "save_and_leave": "保存して離れる",
     "local_table": {
       "title": "ローカル卓",
+      "mortal_model_dir": "Mortal モデルディレクトリ",
+      "mortal_model_dir_hint": "worker コマンド生成にのみ使用します。相対パスはリポジトリルートから解決されます。",
+      "mortal_model_dir_required": "先に Mortal モデルディレクトリを入力してください。",
+      "generate_worker_cmd": "worker コマンドを生成",
+      "generating_worker_cmd": "生成中…",
+      "diagnostic_ready": "worker コマンドを生成しました",
+      "diagnostic_unavailable": "診断を利用できません",
       "ai_worker_cmd": "AI worker コマンド",
       "ai_worker_cmd_hint": "新しいローカル卓セッションに使用します。空欄なら RIICHI_AI_TRAINER_AI_WORKER_CMD または RandomAgent fallback を使います。",
       "ai_worker_timeout_ms": "AI worker タイムアウト (ms)",

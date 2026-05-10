@@ -114,6 +114,15 @@ export type AutoplayConfig = {
 export type LocalGameConfig = {
   ai_worker_cmd: string
   ai_worker_timeout_ms: number | null
+  mortal_model_dir: string
+}
+
+export type LocalMortalCommandResult = {
+  status: string
+  reasons: string[]
+  modelId: string | null
+  modelDir: string | null
+  workerCommand: string | null
 }
 
 export type AppConfig = {
