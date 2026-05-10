@@ -359,10 +359,13 @@ fn backend_local_session_args_from_env() -> Vec<String> {
 
 impl ProcessBackendSessionTransport {
     fn spawn() -> Result<Self, String> {
+        Self::spawn_with_args(backend_local_session_args_from_env())
+    }
+
+    fn spawn_with_args(args: Vec<String>) -> Result<Self, String> {
         let repo_root = find_repo_root().ok_or_else(|| {
             "could not locate repository root with backend/pyproject.toml".to_string()
         })?;
-        let args = backend_local_session_args_from_env();
         let mut child = Command::new("uv")
             .args(&args)
             .current_dir(repo_root)
@@ -582,6 +585,22 @@ mod tests {
         assert_eq!(latest.engine.worker.agent_kind, "worker_agent");
         assert_eq!(latest.engine.worker.label, "JSONL worker");
         assert_eq!(latest.engine.worker.timeout_ms, Some(30000));
+    }
+
+    #[test]
+    fn local_table_backend_process_smoke_reports_worker_metadata() {
+        let worker_cmd = "uv run --project backend python backend/tests/fixtures/bots/normal_bot.py";
+        let args = backend_local_session_args(Some(worker_cmd), Some("5000"));
+        let transport = Box::new(ProcessBackendSessionTransport::spawn_with_args(args).unwrap());
+
+        let session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+        let latest = session.latest_view().unwrap();
+
+        assert!(latest.engine.worker.configured);
+        assert_eq!(latest.engine.worker.agent_kind, "worker_agent");
+        assert_eq!(latest.engine.worker.label, "JSONL worker");
+        assert_eq!(latest.engine.worker.timeout_ms, Some(5000));
+        assert_eq!(latest.source, "backend_mapper");
     }
 
     #[test]
