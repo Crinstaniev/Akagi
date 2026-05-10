@@ -2,11 +2,14 @@ use super::backend_view::{find_repo_root, parse_backend_view_value, reject_forbi
 use crate::schema::{LocalGameView, LocalReviewKeyChoice, LocalReviewSummary};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::env;
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 const GAME_MODE: &str = "4p-red-single";
+const AI_WORKER_CMD_ENV: &str = "RIICHI_AI_TRAINER_AI_WORKER_CMD";
+const AI_WORKER_TIMEOUT_MS_ENV: &str = "RIICHI_AI_TRAINER_AI_WORKER_TIMEOUT_MS";
 
 #[derive(Debug)]
 pub struct BackendLocalSession {
@@ -320,19 +323,48 @@ struct ProcessBackendSessionTransport {
     stdout: BufReader<ChildStdout>,
 }
 
+fn backend_local_session_args(
+    ai_worker_cmd: Option<&str>,
+    ai_worker_timeout_ms: Option<&str>,
+) -> Vec<String> {
+    let mut args = vec![
+        "run".to_string(),
+        "--project".to_string(),
+        "backend".to_string(),
+        "riichi-ai-trainer".to_string(),
+        "local-session".to_string(),
+    ];
+    if let Some(command) = ai_worker_cmd
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--ai-worker-cmd".to_string());
+        args.push(command.to_string());
+    }
+    if let Some(timeout_ms) = ai_worker_timeout_ms
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--ai-worker-timeout-ms".to_string());
+        args.push(timeout_ms.to_string());
+    }
+    args
+}
+
+fn backend_local_session_args_from_env() -> Vec<String> {
+    let ai_worker_cmd = env::var(AI_WORKER_CMD_ENV).ok();
+    let ai_worker_timeout_ms = env::var(AI_WORKER_TIMEOUT_MS_ENV).ok();
+    backend_local_session_args(ai_worker_cmd.as_deref(), ai_worker_timeout_ms.as_deref())
+}
+
 impl ProcessBackendSessionTransport {
     fn spawn() -> Result<Self, String> {
         let repo_root = find_repo_root().ok_or_else(|| {
             "could not locate repository root with backend/pyproject.toml".to_string()
         })?;
+        let args = backend_local_session_args_from_env();
         let mut child = Command::new("uv")
-            .args([
-                "run",
-                "--project",
-                "backend",
-                "riichi-ai-trainer",
-                "local-session",
-            ])
+            .args(&args)
             .current_dir(repo_root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -450,6 +482,45 @@ mod tests {
             "endReason": null,
             "error": null
         })
+    }
+
+    #[test]
+    fn backend_local_session_args_include_worker_config_when_present() {
+        let args = backend_local_session_args(
+            Some("python backend/tests/fixtures/bots/normal_bot.py"),
+            Some("30000"),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "backend",
+                "riichi-ai-trainer",
+                "local-session",
+                "--ai-worker-cmd",
+                "python backend/tests/fixtures/bots/normal_bot.py",
+                "--ai-worker-timeout-ms",
+                "30000",
+            ]
+        );
+    }
+
+    #[test]
+    fn backend_local_session_args_skip_empty_worker_config() {
+        let args = backend_local_session_args(Some(""), Some(""));
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "backend",
+                "riichi-ai-trainer",
+                "local-session",
+            ]
+        );
     }
 
     #[test]
