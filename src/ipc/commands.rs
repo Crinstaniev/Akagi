@@ -87,6 +87,23 @@ pub struct MortalCommandResult {
     pub worker_command: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMortalReadinessResult {
+    pub status: String,
+    #[serde(default)]
+    pub reasons: Vec<String>,
+    #[serde(default)]
+    pub worker_command: Option<String>,
+    pub human_prompt_reached: bool,
+    #[serde(default)]
+    pub accepted_seats: Vec<u8>,
+    #[serde(default)]
+    pub missing_accepted_seats: Vec<u8>,
+    pub accepted_count: u32,
+    pub fallback_count: u32,
+}
+
 fn mortal_env_command_args(model_dir: &str) -> Vec<String> {
     [
         "run",
@@ -94,6 +111,24 @@ fn mortal_env_command_args(model_dir: &str) -> Vec<String> {
         "backend",
         "riichi-ai-trainer",
         "mortal-env",
+        "--model-dir",
+        model_dir,
+        "--worker-command-style",
+        "uv",
+        "--json",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
+
+fn mortal_readiness_command_args(model_dir: &str) -> Vec<String> {
+    [
+        "run",
+        "--project",
+        "backend",
+        "riichi-ai-trainer",
+        "mortal-local-play-smoke",
         "--model-dir",
         model_dir,
         "--worker-command-style",
@@ -113,6 +148,14 @@ fn parse_mortal_command_result(stdout: &[u8]) -> CmdResult<MortalCommandResult> 
         .map_err(|error| format!("mortal-env JSON parse failed: {error}"))
 }
 
+fn parse_mortal_readiness_result(stdout: &[u8]) -> CmdResult<LocalMortalReadinessResult> {
+    if stdout.is_empty() {
+        return Err("mortal-local-play-smoke stdout is empty".into());
+    }
+    serde_json::from_slice(stdout)
+        .map_err(|error| format!("mortal-local-play-smoke JSON parse failed: {error}"))
+}
+
 fn mortal_env_output_to_result(
     success: bool,
     status_label: &str,
@@ -126,6 +169,21 @@ fn mortal_env_output_to_result(
         ));
     }
     parse_mortal_command_result(stdout)
+}
+
+fn mortal_readiness_output_to_result(
+    success: bool,
+    status_label: &str,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> CmdResult<LocalMortalReadinessResult> {
+    if !success {
+        let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+        return Err(format!(
+            "mortal-local-play-smoke exited with status {status_label}; {stderr}"
+        ));
+    }
+    parse_mortal_readiness_result(stdout)
 }
 
 #[tauri::command]
@@ -152,6 +210,37 @@ pub async fn local_game_generate_mortal_command(
     .map_err(|error| format!("failed to run mortal-env: {error}"))?;
 
     mortal_env_output_to_result(
+        output.status.success(),
+        &output.status.to_string(),
+        &output.stdout,
+        &output.stderr,
+    )
+}
+
+#[tauri::command]
+pub async fn local_game_check_mortal_readiness(
+    model_dir: String,
+) -> CmdResult<LocalMortalReadinessResult> {
+    let model_dir = model_dir.trim().to_string();
+    if model_dir.is_empty() {
+        return Err("modelDir is required".into());
+    }
+
+    let repo_root = find_repo_root().ok_or_else(|| {
+        "could not locate repository root with backend/pyproject.toml".to_string()
+    })?;
+    let args = mortal_readiness_command_args(&model_dir);
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new("uv")
+            .args(args)
+            .current_dir(repo_root)
+            .output()
+    })
+    .await
+    .map_err(|error| format!("mortal-local-play-smoke join error: {error}"))?
+    .map_err(|error| format!("failed to run mortal-local-play-smoke: {error}"))?;
+
+    mortal_readiness_output_to_result(
         output.status.success(),
         &output.status.to_string(),
         &output.stdout,
@@ -1356,6 +1445,7 @@ macro_rules! ipc_handlers {
             $crate::ipc::commands::local_game_get_view,
             $crate::ipc::commands::local_game_submit_action,
             $crate::ipc::commands::local_game_generate_mortal_command,
+            $crate::ipc::commands::local_game_check_mortal_readiness,
             $crate::ipc::commands::get_config,
             $crate::ipc::commands::update_config,
             $crate::ipc::commands::list_bots,
@@ -1536,6 +1626,63 @@ mod tests {
         assert_eq!(args[0], "run");
         assert_eq!(args[1], "--project");
         assert!(args.contains(&"mortal-env".to_string()));
+        assert!(args.contains(&"--worker-command-style".to_string()));
+        assert!(args.contains(&"uv".to_string()));
+        assert!(args.contains(&"--json".to_string()));
+    }
+
+    #[test]
+    fn mortal_readiness_result_extracts_three_ai_status() {
+        let raw = br#"{
+            "status": "ready",
+            "reasons": [],
+            "workerCommand": "uv run --project backend python -m riichi_ai_trainer.mortal_adapter --serve",
+            "humanPromptReached": true,
+            "acceptedSeats": [1, 2, 3],
+            "missingAcceptedSeats": [],
+            "acceptedCount": 3,
+            "fallbackCount": 0
+        }"#;
+
+        let result = parse_mortal_readiness_result(raw).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.reasons, Vec::<String>::new());
+        assert_eq!(result.accepted_seats, vec![1, 2, 3]);
+        assert_eq!(result.missing_accepted_seats, Vec::<u8>::new());
+        assert_eq!(result.accepted_count, 3);
+        assert_eq!(result.fallback_count, 0);
+        assert!(result.human_prompt_reached);
+        assert_eq!(
+            result.worker_command.as_deref(),
+            Some("uv run --project backend python -m riichi_ai_trainer.mortal_adapter --serve")
+        );
+    }
+
+    #[test]
+    fn mortal_readiness_result_rejects_invalid_json() {
+        let error = parse_mortal_readiness_result(b"not json").unwrap_err();
+
+        assert!(error.contains("mortal-local-play-smoke JSON parse failed"));
+    }
+
+    #[test]
+    fn mortal_readiness_output_reports_non_zero_exit() {
+        let error =
+            mortal_readiness_output_to_result(false, "exit status: 2", b"", b"missing model")
+                .unwrap_err();
+
+        assert!(error.contains("mortal-local-play-smoke exited with status exit status: 2"));
+        assert!(error.contains("missing model"));
+    }
+
+    #[test]
+    fn mortal_readiness_command_args_use_local_play_smoke() {
+        let args = mortal_readiness_command_args(".local/models/mortal/voidshine-298k");
+
+        assert_eq!(args[0], "run");
+        assert_eq!(args[1], "--project");
+        assert!(args.contains(&"mortal-local-play-smoke".to_string()));
         assert!(args.contains(&"--worker-command-style".to_string()));
         assert!(args.contains(&"uv".to_string()));
         assert!(args.contains(&"--json".to_string()));
