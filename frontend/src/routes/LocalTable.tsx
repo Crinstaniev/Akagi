@@ -161,6 +161,18 @@ function EnginePanel({ view }: { view: LocalGameView }) {
             {view.engine.status}
           </Badge>
         </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">{t('local_table.ai_worker')}</span>
+          <Badge variant={view.engine.worker.configured ? 'default' : 'outline'}>
+            {view.engine.worker.label}
+          </Badge>
+        </div>
+        {view.engine.worker.timeoutMs ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t('local_table.worker_timeout')}</span>
+            <span>{view.engine.worker.timeoutMs} ms</span>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-1">
           {view.engine.capabilities.map((capability) => (
             <Badge key={capability} variant="outline">

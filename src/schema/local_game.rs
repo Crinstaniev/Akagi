@@ -43,6 +43,30 @@ pub struct LocalGameEngineMetadata {
     pub status: String,
     pub capabilities: Vec<String>,
     pub note: String,
+    #[serde(default)]
+    pub worker: LocalWorkerMetadata,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalWorkerMetadata {
+    pub schema_version: u32,
+    pub configured: bool,
+    pub agent_kind: String,
+    pub label: String,
+    pub timeout_ms: Option<u32>,
+}
+
+impl Default for LocalWorkerMetadata {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            configured: false,
+            agent_kind: "random_agent".into(),
+            label: "RandomAgent".into(),
+            timeout_ms: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -543,6 +543,48 @@ mod tests {
     }
 
     #[test]
+    fn backend_session_defaults_missing_worker_metadata_to_random_agent() {
+        let transport = Box::new(FakeTransport::new(vec![ok_response(
+            "tauri-1",
+            "backend-1",
+            view(1, "1m"),
+        )]));
+
+        let session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+        let latest = session.latest_view().unwrap();
+
+        assert!(!latest.engine.worker.configured);
+        assert_eq!(latest.engine.worker.agent_kind, "random_agent");
+        assert_eq!(latest.engine.worker.label, "RandomAgent");
+        assert_eq!(latest.engine.worker.timeout_ms, None);
+    }
+
+    #[test]
+    fn backend_session_parses_worker_metadata() {
+        let mut backend_view = view(1, "1m");
+        backend_view["engine"]["worker"] = json!({
+            "schemaVersion": 1,
+            "configured": true,
+            "agentKind": "worker_agent",
+            "label": "JSONL worker",
+            "timeoutMs": 30000
+        });
+        let transport = Box::new(FakeTransport::new(vec![ok_response(
+            "tauri-1",
+            "backend-1",
+            backend_view,
+        )]));
+
+        let session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+        let latest = session.latest_view().unwrap();
+
+        assert!(latest.engine.worker.configured);
+        assert_eq!(latest.engine.worker.agent_kind, "worker_agent");
+        assert_eq!(latest.engine.worker.label, "JSONL worker");
+        assert_eq!(latest.engine.worker.timeout_ms, Some(30000));
+    }
+
+    #[test]
     fn backend_session_rejects_error_response() {
         let transport = Box::new(FakeTransport::new(vec![json!({
             "type": "local_session_response",
