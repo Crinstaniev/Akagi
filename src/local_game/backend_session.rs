@@ -1,5 +1,5 @@
 use super::backend_view::{find_repo_root, parse_backend_view_value, reject_forbidden_output_keys};
-use crate::schema::LocalGameView;
+use crate::schema::{LocalGameView, LocalReviewKeyChoice, LocalReviewSummary};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::fmt::Debug;
@@ -123,6 +123,12 @@ impl BackendLocalSession {
             if let Some(view) = response.view {
                 self.latest_view = Some(parse_backend_view_value(view)?);
             }
+            if let Some(review_report) = response.review_report {
+                let summary = parse_backend_review_report(review_report)?;
+                if let Some(view) = &mut self.latest_view {
+                    view.review_summary = summary;
+                }
+            }
             self.mark_latest_view_terminal();
             if self.latest_view.is_none() {
                 return Err("backend terminal response has no previous view".into());
@@ -198,6 +204,7 @@ struct BackendLocalSessionResponse {
     terminal: bool,
     end_reason: Option<String>,
     error: Option<String>,
+    review_report: Option<Value>,
 }
 
 impl BackendLocalSessionResponse {
@@ -210,6 +217,99 @@ impl BackendLocalSessionResponse {
         }
         let _ = &self.request_id;
         Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct BackendReviewReport {
+    schema_version: u32,
+    summary: BackendReviewSummaryCounts,
+    #[serde(default)]
+    top_decision_mismatches: Vec<BackendReviewDecision>,
+    #[serde(default)]
+    all_decisions: Vec<BackendReviewDecision>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BackendReviewSummaryCounts {
+    decision_count: u32,
+    matched_recommendation_count: u32,
+    mismatch_count: u32,
+    #[serde(default)]
+    unavailable_count: u32,
+    #[serde(default)]
+    not_ranked_count: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct BackendReviewDecision {
+    turn_index: Option<u32>,
+    selected_action_id: Option<u32>,
+    selected_action_label: Option<String>,
+    recommended_action_id: Option<u32>,
+    recommended_action_label: Option<String>,
+    category: Option<String>,
+    recommendation_reason: Option<String>,
+}
+
+fn parse_backend_review_report(raw: Value) -> Result<LocalReviewSummary, String> {
+    let report: BackendReviewReport = serde_json::from_value(raw)
+        .map_err(|error| format!("backend reviewReport parse failed: {error}"))?;
+    if report.schema_version != 1 {
+        return Err(format!(
+            "unsupported backend reviewReport schema_version: {}",
+            report.schema_version
+        ));
+    }
+
+    let choices_source = if report.top_decision_mismatches.is_empty() {
+        &report.all_decisions
+    } else {
+        &report.top_decision_mismatches
+    };
+    let key_choices = choices_source
+        .iter()
+        .take(5)
+        .map(review_key_choice)
+        .collect();
+
+    Ok(LocalReviewSummary {
+        schema_version: 1,
+        source: "backend_review_report".into(),
+        total_decisions: report.summary.decision_count,
+        top1_matches: report.summary.matched_recommendation_count,
+        mismatch_count: report.summary.mismatch_count,
+        unavailable_count: report.summary.unavailable_count,
+        not_ranked_count: report.summary.not_ranked_count,
+        key_choices,
+        note: "Backend review summary from terminal local-session.".into(),
+    })
+}
+
+fn review_key_choice(decision: &BackendReviewDecision) -> LocalReviewKeyChoice {
+    LocalReviewKeyChoice {
+        turn_index: decision.turn_index.unwrap_or_default(),
+        human_action_label: decision
+            .selected_action_label
+            .clone()
+            .or_else(|| {
+                decision
+                    .selected_action_id
+                    .map(|action_id| format!("Action #{action_id}"))
+            })
+            .unwrap_or_else(|| "Unknown action".into()),
+        recommended_action_label: decision
+            .recommended_action_label
+            .clone()
+            .or_else(|| {
+                decision
+                    .recommended_action_id
+                    .map(|action_id| format!("Action #{action_id}"))
+            }),
+        human_tile: None,
+        recommended_tile: None,
+        category: decision.category.clone().unwrap_or_else(|| "unknown".into()),
+        reason: decision.recommendation_reason.clone(),
     }
 }
 
@@ -407,6 +507,37 @@ mod tests {
     }
 
     #[test]
+    fn backend_session_rejects_hidden_information_inside_review_report() {
+        let transport = Box::new(FakeTransport::new(vec![
+            ok_response("tauri-1", "backend-1", view(1, "1m")),
+            json!({
+                "type": "local_session_response",
+                "requestId": "tauri-2",
+                "ok": true,
+                "gameId": "backend-1",
+                "view": null,
+                "terminal": true,
+                "endReason": "tsumo",
+                "error": null,
+                "reviewReport": {
+                    "schema_version": 1,
+                    "summary": {
+                        "decision_count": 1,
+                        "matched_recommendation_count": 1,
+                        "mismatch_count": 0
+                    },
+                    "all_decisions": [{"wall": ["1m"]}]
+                }
+            }),
+        ]));
+        let mut session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+
+        let error = session.submit_action(1).unwrap_err();
+
+        assert!(error.contains("hidden-information"));
+    }
+
+    #[test]
     fn backend_session_marks_terminal_with_latest_view() {
         let transport = Box::new(FakeTransport::new(vec![
             ok_response("tauri-1", "backend-1", view(1, "1m")),
@@ -428,6 +559,102 @@ mod tests {
         assert_eq!(terminal.engine.status, "terminal");
         assert!(terminal.notice.contains("exhaustive_draw"));
         assert!(terminal.actions.iter().all(|action| !action.enabled));
+    }
+
+    #[test]
+    fn backend_session_maps_terminal_review_report_to_local_summary() {
+        let transport = Box::new(FakeTransport::new(vec![
+            ok_response("tauri-1", "backend-1", view(1, "1m")),
+            json!({
+                "type": "local_session_response",
+                "requestId": "tauri-2",
+                "ok": true,
+                "gameId": "backend-1",
+                "view": null,
+                "terminal": true,
+                "endReason": "tsumo",
+                "error": null,
+                "reviewReport": {
+                    "schema_version": 1,
+                    "summary": {
+                        "decision_count": 3,
+                        "matched_recommendation_count": 1,
+                        "mismatch_count": 1,
+                        "unavailable_count": 1,
+                        "not_ranked_count": 1
+                    },
+                    "top_decision_mismatches": [{
+                        "turn_index": 4,
+                        "selected_action_id": 2,
+                        "selected_action_label": "dahai 2m",
+                        "recommended_action_id": 1,
+                        "recommended_action_label": "dahai 1m",
+                        "category": "mismatch",
+                        "recommendation_reason": "worker_recommendation"
+                    }],
+                    "all_decisions": [{
+                        "turn_index": 0,
+                        "selected_action_id": 1,
+                        "selected_action_label": "dahai 1m",
+                        "recommended_action_id": 1,
+                        "recommended_action_label": "dahai 1m",
+                        "category": "top1_match",
+                        "recommendation_reason": "first_legal_action"
+                    }]
+                }
+            }),
+        ]));
+        let mut session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+
+        let terminal = session.submit_action(1).unwrap();
+
+        assert_eq!(terminal.review_summary.source, "backend_review_report");
+        assert_eq!(terminal.review_summary.total_decisions, 3);
+        assert_eq!(terminal.review_summary.top1_matches, 1);
+        assert_eq!(terminal.review_summary.mismatch_count, 1);
+        assert_eq!(terminal.review_summary.unavailable_count, 1);
+        assert_eq!(terminal.review_summary.not_ranked_count, 1);
+        assert_eq!(terminal.review_summary.key_choices.len(), 1);
+        assert_eq!(terminal.review_summary.key_choices[0].turn_index, 4);
+        assert_eq!(
+            terminal.review_summary.key_choices[0].human_action_label,
+            "dahai 2m"
+        );
+        assert_eq!(
+            terminal.review_summary.key_choices[0].recommended_action_label.as_deref(),
+            Some("dahai 1m")
+        );
+        assert_eq!(terminal.review_summary.key_choices[0].category, "mismatch");
+        assert_eq!(
+            terminal.review_summary.key_choices[0].reason.as_deref(),
+            Some("worker_recommendation")
+        );
+    }
+
+    #[test]
+    fn backend_session_keeps_review_summary_fallback_without_review_report() {
+        let transport = Box::new(FakeTransport::new(vec![
+            ok_response("tauri-1", "backend-1", view(1, "1m")),
+            json!({
+                "type": "local_session_response",
+                "requestId": "tauri-2",
+                "ok": true,
+                "gameId": "backend-1",
+                "view": null,
+                "terminal": true,
+                "endReason": "closed",
+                "error": null
+            }),
+        ]));
+        let mut session = BackendLocalSession::start_with_transport(1, transport).unwrap();
+
+        let terminal = session.submit_action(1).unwrap();
+
+        assert_eq!(terminal.review_summary.source, "unavailable");
+        assert_eq!(terminal.review_summary.total_decisions, 0);
+        assert_eq!(terminal.review_summary.unavailable_count, 0);
+        assert_eq!(terminal.review_summary.not_ranked_count, 0);
+        assert!(terminal.review_summary.key_choices.is_empty());
     }
 
     #[test]

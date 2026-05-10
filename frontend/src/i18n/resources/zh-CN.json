@@ -58,10 +58,14 @@
     "review_total": "决策",
     "review_top1": "命中",
     "review_focus": "关注",
+    "review_unavailable_count": "不可用",
+    "review_not_ranked": "未入榜",
     "review_turn": "第 {{count}} 次",
     "review_human": "用户",
     "review_recommended": "推荐",
-    "review_unavailable": "不可用"
+    "review_unavailable": "不可用",
+    "review_reason": "原因",
+    "review_no_key_choices": "暂无需要重点回看的决策。"
   },
   "history": {
     "title": "历史记录",

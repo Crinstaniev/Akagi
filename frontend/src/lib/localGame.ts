@@ -62,6 +62,7 @@ export type LocalReviewKeyChoice = {
   humanTile: string | null
   recommendedTile: string | null
   category: string
+  reason?: string | null
 }
 
 export type LocalReviewSummary = {
@@ -70,6 +71,8 @@ export type LocalReviewSummary = {
   totalDecisions: number
   top1Matches: number
   mismatchCount: number
+  unavailableCount: number
+  notRankedCount: number
   keyChoices: LocalReviewKeyChoice[]
   note: string
 }
@@ -210,6 +213,8 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
     totalDecisions: 0,
     top1Matches: 0,
     mismatchCount: 0,
+    unavailableCount: 0,
+    notRankedCount: 0,
     keyChoices: [],
     note: 'Dev fallback only; no local review summary.',
   },

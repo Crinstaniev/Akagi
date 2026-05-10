@@ -25,6 +25,11 @@ pub fn build_local_review_summary(decision_points: &[LocalDecisionPoint]) -> Loc
         total_decisions: decision_points.len() as u32,
         top1_matches,
         mismatch_count: key_choices.len() as u32,
+        unavailable_count: key_choices
+            .iter()
+            .filter(|choice| choice.category == "unavailable")
+            .count() as u32,
+        not_ranked_count: 0,
         key_choices,
         note: "Deterministic baseline summary only; not a real AI EV review.".into(),
     }
@@ -39,6 +44,7 @@ fn key_choice(point: &LocalDecisionPoint, category: &str) -> LocalReviewKeyChoic
         human_tile: point.tile.clone(),
         recommended_tile: recommendation.and_then(|item| item.tile.clone()),
         category: category.into(),
+        reason: Some(category.into()),
     }
 }
 

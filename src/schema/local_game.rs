@@ -148,6 +148,10 @@ pub struct LocalReviewSummary {
     pub total_decisions: u32,
     pub top1_matches: u32,
     pub mismatch_count: u32,
+    #[serde(default)]
+    pub unavailable_count: u32,
+    #[serde(default)]
+    pub not_ranked_count: u32,
     pub key_choices: Vec<LocalReviewKeyChoice>,
     pub note: String,
 }
@@ -161,4 +165,6 @@ pub struct LocalReviewKeyChoice {
     pub human_tile: Option<String>,
     pub recommended_tile: Option<String>,
     pub category: String,
+    #[serde(default)]
+    pub reason: Option<String>,
 }

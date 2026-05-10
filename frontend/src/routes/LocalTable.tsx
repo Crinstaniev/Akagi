@@ -379,9 +379,17 @@ function ReviewSummaryPanel({ view }: { view: LocalGameView }) {
           <Stat label={t('local_table.review_total')} value={String(summary.totalDecisions)} />
           <Stat label={t('local_table.review_top1')} value={String(summary.top1Matches)} />
           <Stat label={t('local_table.review_focus')} value={String(summary.mismatchCount)} />
+          <Stat
+            label={t('local_table.review_unavailable_count')}
+            value={String(summary.unavailableCount)}
+          />
+          <Stat
+            label={t('local_table.review_not_ranked')}
+            value={String(summary.notRankedCount)}
+          />
         </div>
         <p className="text-xs text-muted-foreground">{summary.note}</p>
-        {summary.keyChoices.length > 0 && (
+        {summary.keyChoices.length > 0 ? (
           <div className="grid gap-2">
             {summary.keyChoices.slice(0, 5).map((choice) => (
               <div key={choice.turnIndex} className="rounded-md border p-2 text-xs">
@@ -399,10 +407,19 @@ function ReviewSummaryPanel({ view }: { view: LocalGameView }) {
                     {t('local_table.review_recommended')}:{' '}
                     {choice.recommendedActionLabel ?? t('local_table.review_unavailable')}
                   </span>
+                  {choice.reason && (
+                    <span className="break-words">
+                      {t('local_table.review_reason')}: {choice.reason}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
           </div>
+        ) : (
+          <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+            {t('local_table.review_no_key_choices')}
+          </p>
         )}
       </CardContent>
     </Card>
