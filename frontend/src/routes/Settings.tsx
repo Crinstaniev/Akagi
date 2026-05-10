@@ -421,11 +421,14 @@ function LocalTableCard({
   const localGame = draft.local_game ?? {
     ai_worker_cmd: '',
     ai_worker_timeout_ms: null,
+    coach_worker_cmd: '',
+    coach_worker_timeout_ms: null,
     mortal_model_dir: '',
   }
   const setLocalGame = (patch: Partial<typeof localGame>) =>
     setDraft({ ...draft, local_game: { ...localGame, ...patch } })
-  const timeoutValue = localGame.ai_worker_timeout_ms ?? ''
+  const aiTimeoutValue = localGame.ai_worker_timeout_ms ?? ''
+  const coachTimeoutValue = localGame.coach_worker_timeout_ms ?? ''
   const [generating, setGenerating] = useState(false)
   const [generatorResult, setGeneratorResult] = useState<LocalMortalCommandResult | null>(null)
   const [generatorError, setGeneratorError] = useState<string | null>(null)
@@ -525,10 +528,37 @@ function LocalTableCard({
             type="number"
             inputMode="numeric"
             min={1}
-            value={timeoutValue}
+            value={aiTimeoutValue}
             onChange={(e) =>
               setLocalGame({
                 ai_worker_timeout_ms: e.target.value ? Number(e.target.value) : null,
+              })
+            }
+            placeholder={t('common.default')}
+          />
+        </Field>
+        <Field
+          label={t('settings.local_table.coach_worker_cmd')}
+          hint={t('settings.local_table.coach_worker_cmd_hint')}
+        >
+          <Input
+            value={localGame.coach_worker_cmd}
+            onChange={(e) => setLocalGame({ coach_worker_cmd: e.target.value })}
+            placeholder="uv run --project backend ..."
+          />
+        </Field>
+        <Field
+          label={t('settings.local_table.coach_worker_timeout_ms')}
+          hint={t('settings.local_table.coach_worker_timeout_ms_hint')}
+        >
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            value={coachTimeoutValue}
+            onChange={(e) =>
+              setLocalGame({
+                coach_worker_timeout_ms: e.target.value ? Number(e.target.value) : null,
               })
             }
             placeholder={t('common.default')}

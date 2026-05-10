@@ -10,11 +10,15 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 const GAME_MODE: &str = "4p-red-single";
 const AI_WORKER_CMD_ENV: &str = "RIICHI_AI_TRAINER_AI_WORKER_CMD";
 const AI_WORKER_TIMEOUT_MS_ENV: &str = "RIICHI_AI_TRAINER_AI_WORKER_TIMEOUT_MS";
+const COACH_WORKER_CMD_ENV: &str = "RIICHI_AI_TRAINER_COACH_WORKER_CMD";
+const COACH_WORKER_TIMEOUT_MS_ENV: &str = "RIICHI_AI_TRAINER_COACH_WORKER_TIMEOUT_MS";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BackendLocalSessionConfig {
     pub ai_worker_cmd: Option<String>,
     pub ai_worker_timeout_ms: Option<u32>,
+    pub coach_worker_cmd: Option<String>,
+    pub coach_worker_timeout_ms: Option<u32>,
 }
 
 impl From<crate::config::LocalGameConfig> for BackendLocalSessionConfig {
@@ -22,6 +26,8 @@ impl From<crate::config::LocalGameConfig> for BackendLocalSessionConfig {
         Self {
             ai_worker_cmd: Some(config.ai_worker_cmd),
             ai_worker_timeout_ms: config.ai_worker_timeout_ms,
+            coach_worker_cmd: Some(config.coach_worker_cmd),
+            coach_worker_timeout_ms: config.coach_worker_timeout_ms,
         }
     }
 }
@@ -341,6 +347,8 @@ struct ProcessBackendSessionTransport {
 fn backend_local_session_args(
     ai_worker_cmd: Option<&str>,
     ai_worker_timeout_ms: Option<&str>,
+    coach_worker_cmd: Option<&str>,
+    coach_worker_timeout_ms: Option<&str>,
 ) -> Vec<String> {
     let mut args = vec![
         "run".to_string(),
@@ -363,6 +371,20 @@ fn backend_local_session_args(
         args.push("--ai-worker-timeout-ms".to_string());
         args.push(timeout_ms.to_string());
     }
+    if let Some(command) = coach_worker_cmd
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--coach-worker-cmd".to_string());
+        args.push(command.to_string());
+    }
+    if let Some(timeout_ms) = coach_worker_timeout_ms
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--coach-worker-timeout-ms".to_string());
+        args.push(timeout_ms.to_string());
+    }
     args
 }
 
@@ -370,6 +392,8 @@ fn backend_local_session_args_from_config(
     config: &BackendLocalSessionConfig,
     env_ai_worker_cmd: Option<&str>,
     env_ai_worker_timeout_ms: Option<&str>,
+    env_coach_worker_cmd: Option<&str>,
+    env_coach_worker_timeout_ms: Option<&str>,
 ) -> Vec<String> {
     let config_cmd = config
         .ai_worker_cmd
@@ -380,19 +404,36 @@ fn backend_local_session_args_from_config(
         .ai_worker_timeout_ms
         .filter(|timeout_ms| *timeout_ms > 0)
         .map(|timeout_ms| timeout_ms.to_string());
+    let config_coach_cmd = config
+        .coach_worker_cmd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let config_coach_timeout = config
+        .coach_worker_timeout_ms
+        .filter(|timeout_ms| *timeout_ms > 0)
+        .map(|timeout_ms| timeout_ms.to_string());
     backend_local_session_args(
         config_cmd.or(env_ai_worker_cmd).map(str::trim),
         config_timeout.as_deref().or(env_ai_worker_timeout_ms),
+        config_coach_cmd.or(env_coach_worker_cmd).map(str::trim),
+        config_coach_timeout
+            .as_deref()
+            .or(env_coach_worker_timeout_ms),
     )
 }
 
 fn backend_local_session_args_from_env(config: &BackendLocalSessionConfig) -> Vec<String> {
     let ai_worker_cmd = env::var(AI_WORKER_CMD_ENV).ok();
     let ai_worker_timeout_ms = env::var(AI_WORKER_TIMEOUT_MS_ENV).ok();
+    let coach_worker_cmd = env::var(COACH_WORKER_CMD_ENV).ok();
+    let coach_worker_timeout_ms = env::var(COACH_WORKER_TIMEOUT_MS_ENV).ok();
     backend_local_session_args_from_config(
         config,
         ai_worker_cmd.as_deref(),
         ai_worker_timeout_ms.as_deref(),
+        coach_worker_cmd.as_deref(),
+        coach_worker_timeout_ms.as_deref(),
     )
 }
 
@@ -531,6 +572,8 @@ mod tests {
         let args = backend_local_session_args(
             Some("python backend/tests/fixtures/bots/normal_bot.py"),
             Some("30000"),
+            None,
+            None,
         );
 
         assert_eq!(
@@ -551,7 +594,7 @@ mod tests {
 
     #[test]
     fn backend_local_session_args_skip_empty_worker_config() {
-        let args = backend_local_session_args(Some(""), Some(""));
+        let args = backend_local_session_args(Some(""), Some(""), Some(""), Some(""));
 
         assert_eq!(
             args,
@@ -570,10 +613,17 @@ mod tests {
         let config = BackendLocalSessionConfig {
             ai_worker_cmd: Some("  uv run worker  ".into()),
             ai_worker_timeout_ms: Some(30000),
+            coach_worker_cmd: None,
+            coach_worker_timeout_ms: None,
         };
 
-        let args =
-            backend_local_session_args_from_config(&config, Some("env worker"), Some("1000"));
+        let args = backend_local_session_args_from_config(
+            &config,
+            Some("env worker"),
+            Some("1000"),
+            None,
+            None,
+        );
 
         assert_eq!(
             args,
@@ -596,10 +646,17 @@ mod tests {
         let config = BackendLocalSessionConfig {
             ai_worker_cmd: Some("   ".into()),
             ai_worker_timeout_ms: None,
+            coach_worker_cmd: None,
+            coach_worker_timeout_ms: None,
         };
 
-        let args =
-            backend_local_session_args_from_config(&config, Some("env worker"), Some("5000"));
+        let args = backend_local_session_args_from_config(
+            &config,
+            Some("env worker"),
+            Some("5000"),
+            None,
+            None,
+        );
 
         assert_eq!(
             args,
@@ -613,6 +670,72 @@ mod tests {
                 "env worker",
                 "--ai-worker-timeout-ms",
                 "5000",
+            ]
+        );
+    }
+
+    #[test]
+    fn backend_local_session_args_include_coach_worker_config_when_present() {
+        let config = BackendLocalSessionConfig {
+            ai_worker_cmd: None,
+            ai_worker_timeout_ms: None,
+            coach_worker_cmd: Some("  uv run coach  ".into()),
+            coach_worker_timeout_ms: Some(30000),
+        };
+
+        let args = backend_local_session_args_from_config(
+            &config,
+            None,
+            None,
+            Some("env coach"),
+            Some("1000"),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "backend",
+                "riichi-ai-trainer",
+                "local-session",
+                "--coach-worker-cmd",
+                "uv run coach",
+                "--coach-worker-timeout-ms",
+                "30000",
+            ]
+        );
+    }
+
+    #[test]
+    fn backend_local_session_args_fall_back_to_env_for_coach_worker() {
+        let config = BackendLocalSessionConfig {
+            ai_worker_cmd: None,
+            ai_worker_timeout_ms: None,
+            coach_worker_cmd: Some("   ".into()),
+            coach_worker_timeout_ms: None,
+        };
+
+        let args = backend_local_session_args_from_config(
+            &config,
+            None,
+            None,
+            Some("env coach"),
+            Some("7000"),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "backend",
+                "riichi-ai-trainer",
+                "local-session",
+                "--coach-worker-cmd",
+                "env coach",
+                "--coach-worker-timeout-ms",
+                "7000",
             ]
         );
     }
@@ -682,7 +805,7 @@ mod tests {
     fn local_table_backend_process_smoke_reports_worker_metadata() {
         let worker_cmd =
             "uv run --project backend python backend/tests/fixtures/bots/normal_bot.py";
-        let args = backend_local_session_args(Some(worker_cmd), Some("5000"));
+        let args = backend_local_session_args(Some(worker_cmd), Some("5000"), None, None);
         let transport = Box::new(ProcessBackendSessionTransport::spawn_with_args(args).unwrap());
 
         let session = BackendLocalSession::start_with_transport(1, transport).unwrap();

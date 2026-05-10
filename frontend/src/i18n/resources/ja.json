@@ -373,7 +373,11 @@
       "ai_worker_cmd": "AI worker コマンド",
       "ai_worker_cmd_hint": "新しいローカル卓セッションに使用します。空欄なら RIICHI_AI_TRAINER_AI_WORKER_CMD または RandomAgent fallback を使います。",
       "ai_worker_timeout_ms": "AI worker タイムアウト (ms)",
-      "ai_worker_timeout_ms_hint": "空欄なら backend のデフォルトタイムアウトを使います。"
+      "ai_worker_timeout_ms_hint": "空欄なら backend のデフォルトタイムアウトを使います。",
+      "coach_worker_cmd": "Coach worker コマンド",
+      "coach_worker_cmd_hint": "新しいローカル卓セッションの自家向け推薦に使用します。空欄なら RIICHI_AI_TRAINER_COACH_WORKER_CMD または backend baseline coach を使います。",
+      "coach_worker_timeout_ms": "Coach worker タイムアウト (ms)",
+      "coach_worker_timeout_ms_hint": "空欄なら backend のデフォルトタイムアウトを使います。"
     },
     "autoplay": {
       "title": "自動操作",
