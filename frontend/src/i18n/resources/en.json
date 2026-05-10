@@ -361,6 +361,13 @@
     "unsaved_title": "Unsaved changes",
     "unsaved_desc": "You have unsaved settings changes. Save them before leaving, discard them, or stay on this page.",
     "save_and_leave": "Save & leave",
+    "local_table": {
+      "title": "Local Table",
+      "ai_worker_cmd": "AI worker command",
+      "ai_worker_cmd_hint": "Used for new Local Table sessions. Leave blank to use RIICHI_AI_TRAINER_AI_WORKER_CMD or RandomAgent fallback.",
+      "ai_worker_timeout_ms": "AI worker timeout (ms)",
+      "ai_worker_timeout_ms_hint": "Leave blank to use the backend default timeout."
+    },
     "autoplay": {
       "title": "Autoplay",
       "enable": "Enable autoplay",

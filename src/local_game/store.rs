@@ -1,4 +1,4 @@
-use super::backend_session::BackendLocalSession;
+use super::backend_session::{BackendLocalSession, BackendLocalSessionConfig};
 use super::backend_view::backend_fallback_notice;
 use super::host::{LocalGameHost, LocalGameSession};
 use crate::schema::{LocalGameSessionHandle, LocalGameView};
@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use ulid::Ulid;
 
-pub(crate) type BackendSessionStarter = fn(u64) -> Result<BackendLocalSession, String>;
+pub(crate) type BackendSessionStarter =
+    fn(u64, BackendLocalSessionConfig) -> Result<BackendLocalSession, String>;
 
 #[derive(Debug, Default)]
 pub struct LocalGameSessionStore {
@@ -14,6 +15,7 @@ pub struct LocalGameSessionStore {
     next_seed: u64,
     artifact_root: Option<PathBuf>,
     backend_session_starter: Option<BackendSessionStarter>,
+    backend_session_config: BackendLocalSessionConfig,
 }
 
 #[derive(Debug)]
@@ -29,6 +31,7 @@ impl LocalGameSessionStore {
             next_seed: 1,
             artifact_root: None,
             backend_session_starter: None,
+            backend_session_config: BackendLocalSessionConfig::default(),
         }
     }
 
@@ -38,15 +41,20 @@ impl LocalGameSessionStore {
             next_seed: 1,
             artifact_root: Some(artifact_root),
             backend_session_starter: None,
+            backend_session_config: BackendLocalSessionConfig::default(),
         }
     }
 
-    pub fn with_artifact_root_and_backend_loader(artifact_root: PathBuf) -> Self {
+    pub fn with_artifact_root_and_backend_loader(
+        artifact_root: PathBuf,
+        backend_session_config: BackendLocalSessionConfig,
+    ) -> Self {
         Self {
             sessions: BTreeMap::new(),
             next_seed: 1,
             artifact_root: Some(artifact_root),
             backend_session_starter: Some(BackendLocalSession::start),
+            backend_session_config,
         }
     }
 
@@ -57,6 +65,7 @@ impl LocalGameSessionStore {
             next_seed: 1,
             artifact_root: None,
             backend_session_starter: Some(starter),
+            backend_session_config: BackendLocalSessionConfig::default(),
         }
     }
 
@@ -66,7 +75,7 @@ impl LocalGameSessionStore {
         self.next_seed += 1;
 
         if let Some(starter) = self.backend_session_starter {
-            match starter(seed) {
+            match starter(seed, self.backend_session_config.clone()) {
                 Ok(backend_session) => {
                     let view = backend_session.latest_view().unwrap_or_else(|error| {
                         let mut session = LocalGameHost::new(seed).start_session(game_id.clone());
@@ -109,6 +118,10 @@ impl LocalGameSessionStore {
         );
 
         LocalGameSessionHandle { game_id, view }
+    }
+
+    pub fn set_backend_session_config(&mut self, config: BackendLocalSessionConfig) {
+        self.backend_session_config = config;
     }
 
     pub fn get_view(&mut self, game_id: &str) -> Result<LocalGameView, String> {
@@ -217,7 +230,10 @@ mod tests {
         })
     }
 
-    fn backend_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+    fn backend_session_starter(
+        _seed: u64,
+        _config: BackendLocalSessionConfig,
+    ) -> Result<BackendLocalSession, String> {
         BackendLocalSession::start_with_transport(
             1,
             Box::new(FakeTransport::new(vec![
@@ -229,11 +245,17 @@ mod tests {
         )
     }
 
-    fn failing_backend_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+    fn failing_backend_session_starter(
+        _seed: u64,
+        _config: BackendLocalSessionConfig,
+    ) -> Result<BackendLocalSession, String> {
         Err("backend unavailable".into())
     }
 
-    fn backend_submit_error_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+    fn backend_submit_error_session_starter(
+        _seed: u64,
+        _config: BackendLocalSessionConfig,
+    ) -> Result<BackendLocalSession, String> {
         BackendLocalSession::start_with_transport(
             1,
             Box::new(FakeTransport::new(vec![

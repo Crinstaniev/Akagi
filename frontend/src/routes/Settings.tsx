@@ -230,6 +230,8 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      <LocalTableCard draft={draft} setDraft={setDraft} />
+
       <AutoplayCard draft={draft} setDraft={setDraft} />
 
       <Dialog
@@ -397,6 +399,60 @@ function PlatformCard({
           </Select>
         </Field>
         <p className="text-xs text-muted-foreground">{t(info.descriptionKey)}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function LocalTableCard({
+  draft,
+  setDraft,
+}: {
+  draft: AppConfig
+  setDraft: (c: AppConfig) => void
+}) {
+  const { t } = useTranslation()
+  const localGame = draft.local_game ?? {
+    ai_worker_cmd: '',
+    ai_worker_timeout_ms: null,
+  }
+  const setLocalGame = (patch: Partial<typeof localGame>) =>
+    setDraft({ ...draft, local_game: { ...localGame, ...patch } })
+  const timeoutValue = localGame.ai_worker_timeout_ms ?? ''
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('settings.local_table.title')}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <Field
+          label={t('settings.local_table.ai_worker_cmd')}
+          hint={t('settings.local_table.ai_worker_cmd_hint')}
+        >
+          <Input
+            value={localGame.ai_worker_cmd}
+            onChange={(e) => setLocalGame({ ai_worker_cmd: e.target.value })}
+            placeholder="uv run --project backend ..."
+          />
+        </Field>
+        <Field
+          label={t('settings.local_table.ai_worker_timeout_ms')}
+          hint={t('settings.local_table.ai_worker_timeout_ms_hint')}
+        >
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            value={timeoutValue}
+            onChange={(e) =>
+              setLocalGame({
+                ai_worker_timeout_ms: e.target.value ? Number(e.target.value) : null,
+              })
+            }
+            placeholder={t('common.default')}
+          />
+        </Field>
       </CardContent>
     </Card>
   )

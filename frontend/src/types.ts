@@ -111,6 +111,11 @@ export type AutoplayConfig = {
   majsoul: MajsoulAutoplayConfig
 }
 
+export type LocalGameConfig = {
+  ai_worker_cmd: string
+  ai_worker_timeout_ms: number | null
+}
+
 export type AppConfig = {
   general: { language: string; first_run_completed: boolean }
   logging: { dir: string; level: string; all_level: string }
@@ -119,6 +124,7 @@ export type AppConfig = {
   bot: { enabled: boolean; active_4p: string; active_3p: string; auto_sync: boolean; dir: string }
   capture: CaptureConfig
   autoplay: AutoplayConfig
+  local_game: LocalGameConfig
 }
 
 export type FieldKind = 'string' | 'bool' | 'int' | 'float' | 'enum'

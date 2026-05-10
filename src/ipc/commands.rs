@@ -18,6 +18,7 @@ use crate::ipc::capture_supervisor::{
     restart_capture as restart_capture_inner, spawn_capture_supervisor,
 };
 use crate::ipc::state::AppState;
+use crate::local_game::backend_session::BackendLocalSessionConfig;
 use crate::local_game::LocalGameSessionStore;
 use crate::schema::{
     BotInfo, BotSettings, GameRecord, HistoryEvent, HistoryEventLog, HistoryFilter, HoraScoreInfo,
@@ -71,8 +72,11 @@ type CmdResult<T> = Result<T, String>;
 
 async fn create_local_game_session(
     store: &Arc<Mutex<LocalGameSessionStore>>,
+    config: BackendLocalSessionConfig,
 ) -> CmdResult<LocalGameSessionHandle> {
-    Ok(store.lock().await.new_session())
+    let mut store = store.lock().await;
+    store.set_backend_session_config(config);
+    Ok(store.new_session())
 }
 
 async fn read_local_game_view(
@@ -93,7 +97,12 @@ async fn submit_local_game_action(
 
 #[tauri::command]
 pub async fn local_game_new(state: State<'_, AppState>) -> CmdResult<LocalGameSessionHandle> {
-    create_local_game_session(&state.local_game_sessions).await
+    let config = state.config.read().await.local_game.clone();
+    create_local_game_session(
+        &state.local_game_sessions,
+        BackendLocalSessionConfig::from(config),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1385,7 +1394,14 @@ mod tests {
         })
     }
 
-    fn command_backend_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+    fn default_backend_config() -> BackendLocalSessionConfig {
+        BackendLocalSessionConfig::default()
+    }
+
+    fn command_backend_session_starter(
+        _seed: u64,
+        _config: BackendLocalSessionConfig,
+    ) -> Result<BackendLocalSession, String> {
         BackendLocalSession::start_with_transport(
             1,
             Box::new(FakeBackendTransport::new(vec![
@@ -1396,7 +1412,10 @@ mod tests {
         )
     }
 
-    fn command_backend_terminal_session_starter(_seed: u64) -> Result<BackendLocalSession, String> {
+    fn command_backend_terminal_session_starter(
+        _seed: u64,
+        _config: BackendLocalSessionConfig,
+    ) -> Result<BackendLocalSession, String> {
         BackendLocalSession::start_with_transport(
             1,
             Box::new(FakeBackendTransport::new(vec![
@@ -1408,6 +1427,7 @@ mod tests {
 
     fn command_backend_submit_error_session_starter(
         _seed: u64,
+        _config: BackendLocalSessionConfig,
     ) -> Result<BackendLocalSession, String> {
         BackendLocalSession::start_with_transport(
             1,
@@ -1427,6 +1447,8 @@ mod tests {
         cfg.bot.active_4p = "mortal".into();
         cfg.bot.active_3p = "mortal_3p".into();
         cfg.proxy.addr = "127.0.0.1:9999".into();
+        cfg.local_game.ai_worker_cmd = "uv run worker".into();
+        cfg.local_game.ai_worker_timeout_ms = Some(30000);
 
         persist_config(&cfg, &path).unwrap();
 
@@ -1435,12 +1457,16 @@ mod tests {
         assert_eq!(back.bot.active_4p, "mortal");
         assert_eq!(back.bot.active_3p, "mortal_3p");
         assert_eq!(back.proxy.addr, "127.0.0.1:9999");
+        assert_eq!(back.local_game.ai_worker_cmd, "uv run worker");
+        assert_eq!(back.local_game.ai_worker_timeout_ms, Some(30000));
     }
 
     #[tokio::test]
     async fn local_game_new_returns_real_session_view() {
         let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
-        let handle = create_local_game_session(&store).await.unwrap();
+        let handle = create_local_game_session(&store, default_backend_config())
+            .await
+            .unwrap();
 
         assert!(handle.game_id.starts_with("local-"));
         assert_eq!(handle.view.schema_version, 1);
@@ -1451,8 +1477,12 @@ mod tests {
     #[tokio::test]
     async fn local_game_get_view_returns_session_view() {
         let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
-        let handle = create_local_game_session(&store).await.unwrap();
-        let view = read_local_game_view(&store, Some(handle.game_id)).await.unwrap();
+        let handle = create_local_game_session(&store, default_backend_config())
+            .await
+            .unwrap();
+        let view = read_local_game_view(&store, Some(handle.game_id))
+            .await
+            .unwrap();
 
         assert_eq!(view.schema_version, 1);
         assert_eq!(view.source, "local_game_host");
@@ -1475,7 +1505,9 @@ mod tests {
     #[tokio::test]
     async fn local_game_submit_action_returns_updated_view() {
         let store = Arc::new(Mutex::new(LocalGameSessionStore::new()));
-        let handle = create_local_game_session(&store).await.unwrap();
+        let handle = create_local_game_session(&store, default_backend_config())
+            .await
+            .unwrap();
         let action_id = handle.view.actions[0].id;
 
         let view = submit_local_game_action(&store, handle.game_id, action_id)
@@ -1499,7 +1531,9 @@ mod tests {
         let store = Arc::new(Mutex::new(
             LocalGameSessionStore::with_backend_session_starter(command_backend_session_starter),
         ));
-        let handle = create_local_game_session(&store).await.unwrap();
+        let handle = create_local_game_session(&store, default_backend_config())
+            .await
+            .unwrap();
 
         let submitted = submit_local_game_action(&store, handle.game_id.clone(), 1)
             .await
@@ -1521,7 +1555,9 @@ mod tests {
                 command_backend_submit_error_session_starter,
             ),
         ));
-        let handle = create_local_game_session(&store).await.unwrap();
+        let handle = create_local_game_session(&store, default_backend_config())
+            .await
+            .unwrap();
 
         let error = submit_local_game_action(&store, handle.game_id.clone(), 99)
             .await
@@ -1542,7 +1578,9 @@ mod tests {
                 command_backend_terminal_session_starter,
             ),
         ));
-        let handle = create_local_game_session(&store).await.unwrap();
+        let handle = create_local_game_session(&store, default_backend_config())
+            .await
+            .unwrap();
 
         let terminal = submit_local_game_action(&store, handle.game_id, 1)
             .await

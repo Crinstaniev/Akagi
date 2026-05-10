@@ -11,6 +11,21 @@ const GAME_MODE: &str = "4p-red-single";
 const AI_WORKER_CMD_ENV: &str = "RIICHI_AI_TRAINER_AI_WORKER_CMD";
 const AI_WORKER_TIMEOUT_MS_ENV: &str = "RIICHI_AI_TRAINER_AI_WORKER_TIMEOUT_MS";
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BackendLocalSessionConfig {
+    pub ai_worker_cmd: Option<String>,
+    pub ai_worker_timeout_ms: Option<u32>,
+}
+
+impl From<crate::config::LocalGameConfig> for BackendLocalSessionConfig {
+    fn from(config: crate::config::LocalGameConfig) -> Self {
+        Self {
+            ai_worker_cmd: Some(config.ai_worker_cmd),
+            ai_worker_timeout_ms: config.ai_worker_timeout_ms,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct BackendLocalSession {
     backend_game_id: Option<String>,
@@ -22,8 +37,8 @@ pub struct BackendLocalSession {
 }
 
 impl BackendLocalSession {
-    pub fn start(seed: u64) -> Result<Self, String> {
-        let transport = Box::new(ProcessBackendSessionTransport::spawn()?);
+    pub fn start(seed: u64, config: BackendLocalSessionConfig) -> Result<Self, String> {
+        let transport = Box::new(ProcessBackendSessionTransport::spawn(config)?);
         Self::start_with_transport(seed, transport)
     }
 
@@ -301,17 +316,17 @@ fn review_key_choice(decision: &BackendReviewDecision) -> LocalReviewKeyChoice {
                     .map(|action_id| format!("Action #{action_id}"))
             })
             .unwrap_or_else(|| "Unknown action".into()),
-        recommended_action_label: decision
-            .recommended_action_label
-            .clone()
-            .or_else(|| {
-                decision
-                    .recommended_action_id
-                    .map(|action_id| format!("Action #{action_id}"))
-            }),
+        recommended_action_label: decision.recommended_action_label.clone().or_else(|| {
+            decision
+                .recommended_action_id
+                .map(|action_id| format!("Action #{action_id}"))
+        }),
         human_tile: None,
         recommended_tile: None,
-        category: decision.category.clone().unwrap_or_else(|| "unknown".into()),
+        category: decision
+            .category
+            .clone()
+            .unwrap_or_else(|| "unknown".into()),
         reason: decision.recommendation_reason.clone(),
     }
 }
@@ -351,15 +366,39 @@ fn backend_local_session_args(
     args
 }
 
-fn backend_local_session_args_from_env() -> Vec<String> {
+fn backend_local_session_args_from_config(
+    config: &BackendLocalSessionConfig,
+    env_ai_worker_cmd: Option<&str>,
+    env_ai_worker_timeout_ms: Option<&str>,
+) -> Vec<String> {
+    let config_cmd = config
+        .ai_worker_cmd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let config_timeout = config
+        .ai_worker_timeout_ms
+        .filter(|timeout_ms| *timeout_ms > 0)
+        .map(|timeout_ms| timeout_ms.to_string());
+    backend_local_session_args(
+        config_cmd.or(env_ai_worker_cmd).map(str::trim),
+        config_timeout.as_deref().or(env_ai_worker_timeout_ms),
+    )
+}
+
+fn backend_local_session_args_from_env(config: &BackendLocalSessionConfig) -> Vec<String> {
     let ai_worker_cmd = env::var(AI_WORKER_CMD_ENV).ok();
     let ai_worker_timeout_ms = env::var(AI_WORKER_TIMEOUT_MS_ENV).ok();
-    backend_local_session_args(ai_worker_cmd.as_deref(), ai_worker_timeout_ms.as_deref())
+    backend_local_session_args_from_config(
+        config,
+        ai_worker_cmd.as_deref(),
+        ai_worker_timeout_ms.as_deref(),
+    )
 }
 
 impl ProcessBackendSessionTransport {
-    fn spawn() -> Result<Self, String> {
-        Self::spawn_with_args(backend_local_session_args_from_env())
+    fn spawn(config: BackendLocalSessionConfig) -> Result<Self, String> {
+        Self::spawn_with_args(backend_local_session_args_from_env(&config))
     }
 
     fn spawn_with_args(args: Vec<String>) -> Result<Self, String> {
@@ -527,6 +566,58 @@ mod tests {
     }
 
     #[test]
+    fn backend_local_session_args_use_saved_worker_config() {
+        let config = BackendLocalSessionConfig {
+            ai_worker_cmd: Some("  uv run worker  ".into()),
+            ai_worker_timeout_ms: Some(30000),
+        };
+
+        let args =
+            backend_local_session_args_from_config(&config, Some("env worker"), Some("1000"));
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "backend",
+                "riichi-ai-trainer",
+                "local-session",
+                "--ai-worker-cmd",
+                "uv run worker",
+                "--ai-worker-timeout-ms",
+                "30000",
+            ]
+        );
+    }
+
+    #[test]
+    fn backend_local_session_args_fall_back_to_env_when_saved_config_empty() {
+        let config = BackendLocalSessionConfig {
+            ai_worker_cmd: Some("   ".into()),
+            ai_worker_timeout_ms: None,
+        };
+
+        let args =
+            backend_local_session_args_from_config(&config, Some("env worker"), Some("5000"));
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "backend",
+                "riichi-ai-trainer",
+                "local-session",
+                "--ai-worker-cmd",
+                "env worker",
+                "--ai-worker-timeout-ms",
+                "5000",
+            ]
+        );
+    }
+
+    #[test]
     fn backend_session_new_get_view_and_submit_return_backend_views() {
         let transport = Box::new(FakeTransport::new(vec![
             ok_response("tauri-1", "backend-1", view(1, "1m")),
@@ -589,7 +680,8 @@ mod tests {
 
     #[test]
     fn local_table_backend_process_smoke_reports_worker_metadata() {
-        let worker_cmd = "uv run --project backend python backend/tests/fixtures/bots/normal_bot.py";
+        let worker_cmd =
+            "uv run --project backend python backend/tests/fixtures/bots/normal_bot.py";
         let args = backend_local_session_args(Some(worker_cmd), Some("5000"));
         let transport = Box::new(ProcessBackendSessionTransport::spawn_with_args(args).unwrap());
 
@@ -753,7 +845,9 @@ mod tests {
             "dahai 2m"
         );
         assert_eq!(
-            terminal.review_summary.key_choices[0].recommended_action_label.as_deref(),
+            terminal.review_summary.key_choices[0]
+                .recommended_action_label
+                .as_deref(),
             Some("dahai 1m")
         );
         assert_eq!(terminal.review_summary.key_choices[0].category, "mismatch");
