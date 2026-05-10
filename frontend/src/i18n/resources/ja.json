@@ -58,10 +58,14 @@
     "review_total": "判断",
     "review_top1": "一致",
     "review_focus": "注目",
+    "review_unavailable_count": "利用不可",
+    "review_not_ranked": "順位外",
     "review_turn": "{{count}} 回目",
     "review_human": "ユーザー",
     "review_recommended": "推奨",
-    "review_unavailable": "利用不可"
+    "review_unavailable": "利用不可",
+    "review_reason": "理由",
+    "review_no_key_choices": "重点的に確認する判断はまだありません。"
   },
   "history": {
     "title": "対局履歴",

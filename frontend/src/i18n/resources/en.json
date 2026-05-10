@@ -58,10 +58,14 @@
     "review_total": "Decisions",
     "review_top1": "Top-1",
     "review_focus": "Focus",
+    "review_unavailable_count": "Unavailable",
+    "review_not_ranked": "Not ranked",
     "review_turn": "Decision {{count}}",
     "review_human": "Human",
     "review_recommended": "Recommended",
-    "review_unavailable": "Unavailable"
+    "review_unavailable": "Unavailable",
+    "review_reason": "Reason",
+    "review_no_key_choices": "No key decisions to review yet."
   },
   "history": {
     "title": "Game History",

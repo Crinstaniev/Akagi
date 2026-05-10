@@ -159,6 +159,8 @@ impl Default for LocalReviewSummary {
             total_decisions: 0,
             top1_matches: 0,
             mismatch_count: 0,
+            unavailable_count: 0,
+            not_ranked_count: 0,
             key_choices: Vec::new(),
             note: "Review summary is not available for backend initial view.".into(),
         }
@@ -209,6 +211,8 @@ mod tests {
         assert!(view.notice.contains("read-only"));
         assert_eq!(view.artifact_status, LocalArtifactStatus::pending());
         assert_eq!(view.review_summary.total_decisions, 0);
+        assert_eq!(view.review_summary.unavailable_count, 0);
+        assert_eq!(view.review_summary.not_ranked_count, 0);
     }
 
     #[test]
