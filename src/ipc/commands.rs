@@ -1592,6 +1592,8 @@ mod tests {
         cfg.proxy.addr = "127.0.0.1:9999".into();
         cfg.local_game.ai_worker_cmd = "uv run worker".into();
         cfg.local_game.ai_worker_timeout_ms = Some(30000);
+        cfg.local_game.coach_worker_cmd = "uv run coach".into();
+        cfg.local_game.coach_worker_timeout_ms = Some(31000);
         cfg.local_game.mortal_model_dir = ".local/models/mortal/voidshine-298k".into();
 
         persist_config(&cfg, &path).unwrap();
@@ -1603,6 +1605,8 @@ mod tests {
         assert_eq!(back.proxy.addr, "127.0.0.1:9999");
         assert_eq!(back.local_game.ai_worker_cmd, "uv run worker");
         assert_eq!(back.local_game.ai_worker_timeout_ms, Some(30000));
+        assert_eq!(back.local_game.coach_worker_cmd, "uv run coach");
+        assert_eq!(back.local_game.coach_worker_timeout_ms, Some(31000));
         assert_eq!(
             back.local_game.mortal_model_dir,
             ".local/models/mortal/voidshine-298k"
@@ -1610,7 +1614,7 @@ mod tests {
     }
 
     #[test]
-    fn local_game_config_defaults_missing_mortal_model_dir() {
+    fn local_game_config_defaults_missing_optional_fields() {
         let body = r#"
             [local_game]
             ai_worker_cmd = "uv run worker"
@@ -1621,6 +1625,8 @@ mod tests {
 
         assert_eq!(cfg.local_game.ai_worker_cmd, "uv run worker");
         assert_eq!(cfg.local_game.ai_worker_timeout_ms, Some(30000));
+        assert_eq!(cfg.local_game.coach_worker_cmd, "");
+        assert_eq!(cfg.local_game.coach_worker_timeout_ms, None);
         assert_eq!(cfg.local_game.mortal_model_dir, "");
     }
 

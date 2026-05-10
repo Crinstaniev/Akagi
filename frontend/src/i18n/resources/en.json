@@ -373,7 +373,11 @@
       "ai_worker_cmd": "AI worker command",
       "ai_worker_cmd_hint": "Used for new Local Table sessions. Leave blank to use RIICHI_AI_TRAINER_AI_WORKER_CMD or RandomAgent fallback.",
       "ai_worker_timeout_ms": "AI worker timeout (ms)",
-      "ai_worker_timeout_ms_hint": "Leave blank to use the backend default timeout."
+      "ai_worker_timeout_ms_hint": "Leave blank to use the backend default timeout.",
+      "coach_worker_cmd": "Coach worker command",
+      "coach_worker_cmd_hint": "Used for seat 0 recommendations in new Local Table sessions. Leave blank to use RIICHI_AI_TRAINER_COACH_WORKER_CMD or the backend baseline coach.",
+      "coach_worker_timeout_ms": "Coach worker timeout (ms)",
+      "coach_worker_timeout_ms_hint": "Leave blank to use the backend default timeout."
     },
     "autoplay": {
       "title": "Autoplay",

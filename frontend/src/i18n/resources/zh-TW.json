@@ -373,7 +373,11 @@
       "ai_worker_cmd": "AI worker 命令",
       "ai_worker_cmd_hint": "用於新建本地牌桌 session。留空時繼續使用 RIICHI_AI_TRAINER_AI_WORKER_CMD 或 RandomAgent fallback。",
       "ai_worker_timeout_ms": "AI worker 逾時 (ms)",
-      "ai_worker_timeout_ms_hint": "留空時使用 backend 預設逾時。"
+      "ai_worker_timeout_ms_hint": "留空時使用 backend 預設逾時。",
+      "coach_worker_cmd": "Coach worker 命令",
+      "coach_worker_cmd_hint": "用於新建本地牌桌 session 的自家推薦。留空時繼續使用 RIICHI_AI_TRAINER_COACH_WORKER_CMD 或 backend baseline coach。",
+      "coach_worker_timeout_ms": "Coach worker 逾時 (ms)",
+      "coach_worker_timeout_ms_hint": "留空時使用 backend 預設逾時。"
     },
     "autoplay": {
       "title": "自動打牌",

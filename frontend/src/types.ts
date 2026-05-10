@@ -114,6 +114,8 @@ export type AutoplayConfig = {
 export type LocalGameConfig = {
   ai_worker_cmd: string
   ai_worker_timeout_ms: number | null
+  coach_worker_cmd: string
+  coach_worker_timeout_ms: number | null
   mortal_model_dir: string
 }
 
