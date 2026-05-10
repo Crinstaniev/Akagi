@@ -127,6 +127,17 @@ export type LocalMortalCommandResult = {
   workerCommand: string | null
 }
 
+export type LocalMortalReadinessResult = {
+  status: string
+  reasons: string[]
+  workerCommand: string | null
+  humanPromptReached: boolean
+  acceptedSeats: number[]
+  missingAcceptedSeats: number[]
+  acceptedCount: number
+  fallbackCount: number
+}
+
 export type AppConfig = {
   general: { language: string; first_run_completed: boolean }
   logging: { dir: string; level: string; all_level: string }
