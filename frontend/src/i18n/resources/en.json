@@ -29,6 +29,8 @@
     "engine": "Rule engine",
     "engine_source": "Source",
     "engine_status": "Status",
+    "ai_worker": "AI source",
+    "worker_timeout": "Timeout",
     "actions": "Available actions",
     "submitting_action": "Submitting...",
     "action_discard": "Discard",

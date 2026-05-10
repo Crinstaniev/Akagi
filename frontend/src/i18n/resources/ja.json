@@ -29,6 +29,8 @@
     "engine": "ルールエンジン",
     "engine_source": "ソース",
     "engine_status": "状態",
+    "ai_worker": "AI ソース",
+    "worker_timeout": "タイムアウト",
     "actions": "送信可能なアクション",
     "submitting_action": "送信中...",
     "action_discard": "打牌",

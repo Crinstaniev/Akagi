@@ -30,12 +30,21 @@ export type LocalGameActionView = {
   mjai?: Record<string, unknown> | null
 }
 
+export type LocalWorkerMetadata = {
+  schemaVersion: number
+  configured: boolean
+  agentKind: string
+  label: string
+  timeoutMs: number | null
+}
+
 export type LocalGameEngineMetadata = {
   schemaVersion: number
   source: string
   status: string
   capabilities: string[]
   note: string
+  worker: LocalWorkerMetadata
 }
 
 export type LocalGameRecommendationView = {
@@ -114,6 +123,13 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
     status: 'active',
     capabilities: ['discard'],
     note: 'Browser fallback only; full RiichiEnv rules are not active.',
+    worker: {
+      schemaVersion: 1,
+      configured: false,
+      agentKind: 'random_agent',
+      label: 'RandomAgent',
+      timeoutMs: null,
+    },
   },
   phaseLabel: 'Dev fallback',
   notice: 'Vite browser fallback only. Tauri desktop uses local_game_new.',

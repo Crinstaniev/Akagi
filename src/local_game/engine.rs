@@ -1,4 +1,4 @@
-use crate::schema::local_game::LocalGameEngineMetadata;
+use crate::schema::local_game::{LocalGameEngineMetadata, LocalWorkerMetadata};
 
 pub const ENGINE_SCHEMA_VERSION: u32 = 1;
 pub const ENGINE_SOURCE_DETERMINISTIC_STUB: &str = "deterministic_stub";
@@ -30,6 +30,7 @@ pub fn deterministic_engine_metadata(ended: bool) -> LocalGameEngineMetadata {
             .map(|capability| (*capability).into())
             .collect(),
         note: DETERMINISTIC_ENGINE_NOTE.into(),
+        worker: LocalWorkerMetadata::default(),
     }
 }
 
