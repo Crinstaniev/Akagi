@@ -25,6 +25,11 @@ pub fn build_local_review_summary(decision_points: &[LocalDecisionPoint]) -> Loc
         total_decisions: decision_points.len() as u32,
         top1_matches,
         mismatch_count: key_choices.len() as u32,
+        attention_count: key_choices.len() as u32,
+        fallback_count: key_choices
+            .iter()
+            .filter(|choice| choice.category == "unavailable")
+            .count() as u32,
         unavailable_count: key_choices
             .iter()
             .filter(|choice| choice.category == "unavailable")

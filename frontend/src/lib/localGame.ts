@@ -55,6 +55,9 @@ export type LocalGameRecommendationView = {
   source: string
   status: string
   note: string
+  reason?: string | null
+  elapsedMs?: number | null
+  meta?: Record<string, unknown> | null
 }
 
 export type LocalArtifactStatus = {
@@ -80,6 +83,8 @@ export type LocalReviewSummary = {
   totalDecisions: number
   top1Matches: number
   mismatchCount: number
+  attentionCount: number
+  fallbackCount: number
   unavailableCount: number
   notRankedCount: number
   keyChoices: LocalReviewKeyChoice[]
@@ -215,6 +220,8 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
       source: 'frontend_dev_fallback',
       status: 'recommended',
       note: 'Dev fallback only; not a real AI recommendation.',
+      reason: 'dev_fallback',
+      elapsedMs: null,
     },
   ],
   artifactStatus: {
@@ -229,6 +236,8 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
     totalDecisions: 0,
     top1Matches: 0,
     mismatchCount: 0,
+    attentionCount: 0,
+    fallbackCount: 0,
     unavailableCount: 0,
     notRankedCount: 0,
     keyChoices: [],

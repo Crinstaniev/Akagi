@@ -251,6 +251,8 @@ struct BackendReviewReport {
     #[serde(default)]
     top_decision_mismatches: Vec<BackendReviewDecision>,
     #[serde(default)]
+    key_choices: Vec<BackendReviewDecision>,
+    #[serde(default)]
     all_decisions: Vec<BackendReviewDecision>,
 }
 
@@ -259,6 +261,10 @@ struct BackendReviewSummaryCounts {
     decision_count: u32,
     matched_recommendation_count: u32,
     mismatch_count: u32,
+    #[serde(default)]
+    attention_count: u32,
+    #[serde(default)]
+    fallback_count: u32,
     #[serde(default)]
     unavailable_count: u32,
     #[serde(default)]
@@ -286,10 +292,12 @@ fn parse_backend_review_report(raw: Value) -> Result<LocalReviewSummary, String>
         ));
     }
 
-    let choices_source = if report.top_decision_mismatches.is_empty() {
-        &report.all_decisions
-    } else {
+    let choices_source = if !report.key_choices.is_empty() {
+        &report.key_choices
+    } else if !report.top_decision_mismatches.is_empty() {
         &report.top_decision_mismatches
+    } else {
+        &report.all_decisions
     };
     let key_choices = choices_source
         .iter()
@@ -303,6 +311,18 @@ fn parse_backend_review_report(raw: Value) -> Result<LocalReviewSummary, String>
         total_decisions: report.summary.decision_count,
         top1_matches: report.summary.matched_recommendation_count,
         mismatch_count: report.summary.mismatch_count,
+        attention_count: if report.summary.attention_count > 0 {
+            report.summary.attention_count
+        } else {
+            report.summary.mismatch_count
+                + report.summary.unavailable_count
+                + report.summary.not_ranked_count
+        },
+        fallback_count: if report.summary.fallback_count > 0 {
+            report.summary.fallback_count
+        } else {
+            report.summary.unavailable_count
+        },
         unavailable_count: report.summary.unavailable_count,
         not_ranked_count: report.summary.not_ranked_count,
         key_choices,
@@ -927,6 +947,8 @@ mod tests {
                         "decision_count": 3,
                         "matched_recommendation_count": 1,
                         "mismatch_count": 1,
+                        "attention_count": 3,
+                        "fallback_count": 1,
                         "unavailable_count": 1,
                         "not_ranked_count": 1
                     },
@@ -959,6 +981,8 @@ mod tests {
         assert_eq!(terminal.review_summary.total_decisions, 3);
         assert_eq!(terminal.review_summary.top1_matches, 1);
         assert_eq!(terminal.review_summary.mismatch_count, 1);
+        assert_eq!(terminal.review_summary.attention_count, 3);
+        assert_eq!(terminal.review_summary.fallback_count, 1);
         assert_eq!(terminal.review_summary.unavailable_count, 1);
         assert_eq!(terminal.review_summary.not_ranked_count, 1);
         assert_eq!(terminal.review_summary.key_choices.len(), 1);
@@ -1001,6 +1025,8 @@ mod tests {
 
         assert_eq!(terminal.review_summary.source, "unavailable");
         assert_eq!(terminal.review_summary.total_decisions, 0);
+        assert_eq!(terminal.review_summary.attention_count, 0);
+        assert_eq!(terminal.review_summary.fallback_count, 0);
         assert_eq!(terminal.review_summary.unavailable_count, 0);
         assert_eq!(terminal.review_summary.not_ranked_count, 0);
         assert!(terminal.review_summary.key_choices.is_empty());

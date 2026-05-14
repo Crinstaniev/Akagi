@@ -53,6 +53,20 @@ export function LocalTable() {
   const self = view.players.find((player) => player.isSelf)
   const opponents = view.players.filter((player) => !player.isSelf)
   const canSubmitAction = loadResult.mode === 'tauri' && loadResult.gameId.length > 0
+  const primaryRecommendation =
+    view.recommendations.find((recommendation) => recommendation.rank === 1) ??
+    view.recommendations[0]
+  const recommendedActionId =
+    primaryRecommendation?.status === 'recommended' ? primaryRecommendation.actionId : null
+  const recommendedDiscardTile =
+    primaryRecommendation?.status === 'recommended' &&
+    view.actions.some(
+      (action) =>
+        action.id === primaryRecommendation.actionId &&
+        normalizeActionType(action.type) === 'discard',
+    )
+      ? primaryRecommendation.tile
+      : null
 
   async function handleSubmitAction(actionId: number) {
     if (!canSubmitAction || !loadResult) return
@@ -123,7 +137,12 @@ export function LocalTable() {
             </div>
           </div>
 
-          {self && <SelfHandPanel selfHandTiles={view.selfHandTiles} />}
+          {self && (
+            <SelfHandPanel
+              selfHandTiles={view.selfHandTiles}
+              recommendedDiscardTile={recommendedDiscardTile}
+            />
+          )}
         </section>
 
         <aside className="grid content-start gap-4">
@@ -132,6 +151,7 @@ export function LocalTable() {
             actions={view.actions}
             canSubmit={canSubmitAction}
             submittingActionId={submittingActionId}
+            recommendedActionId={recommendedActionId}
             onSubmitAction={handleSubmitAction}
           />
           <RecommendationPanel recommendations={view.recommendations} />
@@ -241,7 +261,13 @@ function RiverPreview({ player }: { player: LocalGamePlayerView }) {
   )
 }
 
-function SelfHandPanel({ selfHandTiles }: { selfHandTiles: string[] }) {
+function SelfHandPanel({
+  selfHandTiles,
+  recommendedDiscardTile,
+}: {
+  selfHandTiles: string[]
+  recommendedDiscardTile: string | null
+}) {
   const { t } = useTranslation()
   return (
     <Card className="py-0">
@@ -250,7 +276,7 @@ function SelfHandPanel({ selfHandTiles }: { selfHandTiles: string[] }) {
         <span className="text-xs text-muted-foreground">{t('local_table.self_hand_hint')}</span>
       </CardHeader>
       <CardContent className="overflow-auto p-4">
-        <SafeTiles tiles={selfHandTiles} kind="hand" />
+        <SafeTiles tiles={selfHandTiles} kind="hand" highlightTile={recommendedDiscardTile} />
       </CardContent>
     </Card>
   )
@@ -260,11 +286,13 @@ function ActionPanel({
   actions,
   canSubmit,
   submittingActionId,
+  recommendedActionId,
   onSubmitAction,
 }: {
   actions: LocalGameActionView[]
   canSubmit: boolean
   submittingActionId: number | null
+  recommendedActionId: number | null
   onSubmitAction: (actionId: number) => void
 }) {
   const { t } = useTranslation()
@@ -274,28 +302,37 @@ function ActionPanel({
         <CardTitle className="text-sm">{t('local_table.actions')}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2 p-3">
-        {actions.map((action) => (
-          <Button
-            key={action.id}
-            variant="outline"
-            disabled={!canSubmit || !action.enabled || submittingActionId !== null}
-            className="h-auto justify-start gap-3 py-2"
-            onClick={() => onSubmitAction(action.id)}
-          >
-            <Badge variant={action.type === 'discard' ? 'secondary' : 'outline'}>
-              {actionTypeLabel(t, action.type)}
-            </Badge>
-            {action.tile && (
-              <span className="shrink-0">
-                <SafeTiles tiles={[action.tile]} kind="rec" fallback={action.tile} />
+        {actions.map((action) => {
+          const isRecommended = action.id === recommendedActionId
+          return (
+            <Button
+              key={action.id}
+              variant={isRecommended ? 'default' : 'outline'}
+              disabled={!canSubmit || !action.enabled || submittingActionId !== null}
+              className={`h-auto justify-start gap-3 py-2 ${
+                isRecommended ? 'ring-2 ring-primary/45 ring-offset-1' : ''
+              }`}
+              onClick={() => onSubmitAction(action.id)}
+            >
+              <Badge variant={action.type === 'discard' ? 'secondary' : 'outline'}>
+                {actionTypeLabel(t, action.type)}
+              </Badge>
+              {action.tile && (
+                <span className="shrink-0">
+                  <SafeTiles tiles={[action.tile]} kind="rec" fallback={action.tile} />
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-left">{action.label}</span>
+              <span className="max-w-32 truncate text-xs text-muted-foreground">
+                {submittingActionId === action.id
+                  ? t('local_table.submitting_action')
+                  : isRecommended
+                    ? t('local_table.recommended_action')
+                    : action.hint}
               </span>
-            )}
-            <span className="min-w-0 flex-1 truncate text-left">{action.label}</span>
-            <span className="max-w-32 truncate text-xs text-muted-foreground">
-              {submittingActionId === action.id ? t('local_table.submitting_action') : action.hint}
-            </span>
-          </Button>
-        ))}
+            </Button>
+          )
+        })}
       </CardContent>
     </Card>
   )
@@ -313,14 +350,33 @@ function RecommendationPanel({ recommendations }: { recommendations: LocalGameRe
           <div key={recommendation.rank} className="rounded-md border p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium">{recommendation.label}</span>
-              <Badge variant="outline">#{recommendation.rank}</Badge>
+              <div className="flex items-center gap-1">
+                <Badge
+                  variant={recommendation.status === 'recommended' ? 'default' : 'destructive'}
+                >
+                  {recommendationStatusLabel(t, recommendation.status)}
+                </Badge>
+                <Badge variant="outline">#{recommendation.rank}</Badge>
+              </div>
+            </div>
+            <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
+              <Badge variant="secondary">{recommendation.source}</Badge>
+              {recommendation.elapsedMs != null && (
+                <span className="text-muted-foreground">
+                  {t('local_table.recommendation_elapsed', {
+                    count: recommendation.elapsedMs.toFixed(1),
+                  })}
+                </span>
+              )}
             </div>
             {recommendation.tile && (
               <div className="mb-2">
                 <SafeTiles tiles={[recommendation.tile]} kind="rec" fallback={recommendation.tile} />
               </div>
             )}
-            <p className="text-xs text-muted-foreground">{recommendation.note}</p>
+            <p className="text-xs text-muted-foreground">
+              {recommendation.reason ?? recommendation.note}
+            </p>
           </div>
         ))}
       </CardContent>
@@ -390,7 +446,8 @@ function ReviewSummaryPanel({ view }: { view: LocalGameView }) {
         <div className="grid grid-cols-3 gap-2">
           <Stat label={t('local_table.review_total')} value={String(summary.totalDecisions)} />
           <Stat label={t('local_table.review_top1')} value={String(summary.top1Matches)} />
-          <Stat label={t('local_table.review_focus')} value={String(summary.mismatchCount)} />
+          <Stat label={t('local_table.review_focus')} value={String(summary.attentionCount)} />
+          <Stat label={t('local_table.review_fallback')} value={String(summary.fallbackCount)} />
           <Stat
             label={t('local_table.review_unavailable_count')}
             value={String(summary.unavailableCount)}
@@ -462,14 +519,38 @@ function SafeTiles({
   kind,
   riverMode,
   fallback,
+  highlightTile,
 }: {
   tiles: string[]
   kind: 'river' | 'hand' | 'melds' | 'dora' | 'rec'
   riverMode?: boolean
   fallback?: string
+  highlightTile?: string | null
 }) {
   const seq = mjaiToMahgen(tiles)
-  if (seq) return <Mahgen seq={seq} kind={kind} riverMode={riverMode} />
+  if (seq && !highlightTile) return <Mahgen seq={seq} kind={kind} riverMode={riverMode} />
+  if (seq && highlightTile) {
+    return (
+      <span className="inline-flex max-w-full flex-wrap gap-1 align-middle">
+        {tiles.map((tile, index) => {
+          const itemSeq = mjaiToMahgen([tile])
+          const highlighted = tile === highlightTile
+          return (
+            <span
+              key={`${tile}-${index}`}
+              className={
+                highlighted
+                  ? 'rounded-md bg-primary/15 p-1 ring-2 ring-primary/60 ring-offset-1'
+                  : 'rounded-md p-1'
+              }
+            >
+              {itemSeq ? <Mahgen seq={itemSeq} kind={kind} riverMode={riverMode} /> : tile}
+            </span>
+          )
+        })}
+      </span>
+    )
+  }
 
   const text = fallback ?? tiles.filter(Boolean).join(' ')
   if (!text) return <span className="text-xs text-muted-foreground">-</span>
@@ -477,12 +558,20 @@ function SafeTiles({
   return (
     <span className="inline-flex max-w-full flex-wrap gap-1 align-middle">
       {text.split(/\s+/).map((part, index) => (
-        <Badge key={`${part}-${index}`} variant="outline" className="font-mono text-[11px]">
+        <Badge
+          key={`${part}-${index}`}
+          variant={part === highlightTile ? 'default' : 'outline'}
+          className="font-mono text-[11px]"
+        >
           {part}
         </Badge>
       ))}
     </span>
   )
+}
+
+function recommendationStatusLabel(t: ReturnType<typeof useTranslation>['t'], status: string) {
+  return t(`local_table.recommendation_status_${status}`, { defaultValue: status })
 }
 
 function actionTypeLabel(t: ReturnType<typeof useTranslation>['t'], actionType: string) {

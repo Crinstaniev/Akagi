@@ -152,16 +152,24 @@ pub struct LocalGameActionView {
     pub mjai: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalGameRecommendationView {
     pub rank: u32,
+    #[serde(default)]
     pub action_id: Option<u32>,
+    #[serde(default)]
     pub tile: Option<String>,
     pub label: String,
     pub source: String,
     pub status: String,
     pub note: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub elapsed_ms: Option<f64>,
+    #[serde(default)]
+    pub meta: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +180,10 @@ pub struct LocalReviewSummary {
     pub total_decisions: u32,
     pub top1_matches: u32,
     pub mismatch_count: u32,
+    #[serde(default)]
+    pub attention_count: u32,
+    #[serde(default)]
+    pub fallback_count: u32,
     #[serde(default)]
     pub unavailable_count: u32,
     #[serde(default)]

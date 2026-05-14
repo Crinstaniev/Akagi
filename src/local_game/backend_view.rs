@@ -159,6 +159,8 @@ impl Default for LocalReviewSummary {
             total_decisions: 0,
             top1_matches: 0,
             mismatch_count: 0,
+            attention_count: 0,
+            fallback_count: 0,
             unavailable_count: 0,
             not_ranked_count: 0,
             key_choices: Vec::new(),

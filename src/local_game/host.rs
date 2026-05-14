@@ -317,6 +317,13 @@ fn recommendation_from_first_action(
         } else {
             "The local hand ended in exhaustive draw.".into()
         },
+        reason: Some(if action.is_some() {
+            "first_legal_action".into()
+        } else {
+            "no_legal_actions".into()
+        }),
+        elapsed_ms: None,
+        meta: None,
     }
 }
 
