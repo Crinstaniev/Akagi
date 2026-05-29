@@ -9,7 +9,7 @@
       "cwd": "./frontend"
     },
     "beforeBuildCommand": {
-      "script": "bash -c '../../scripts/prepare_tauri_desktop_resources.sh && cd frontend && ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build'",
+      "script": "bash -c \"../../scripts/prepare_tauri_desktop_resources.sh && cd frontend && ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build\"",
       "cwd": "."
     }
   },
