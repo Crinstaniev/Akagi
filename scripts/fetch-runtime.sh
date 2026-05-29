@@ -138,7 +138,14 @@ else
       fi
       unzip -q "${TMP_UV}/${UV_FILE}" -d "${TMP_UV}/extracted"
       # uv zip layout: uv-<triple>/uv.exe
-      cp "${TMP_UV}/extracted"/uv-*/* "${TMP_UV}/" || cp "${TMP_UV}/extracted"/* "${TMP_UV}/"
+      shopt -s nullglob
+      uv_zip_entries=("${TMP_UV}/extracted"/uv-*/*)
+      if (( ${#uv_zip_entries[@]} > 0 )); then
+        cp "${uv_zip_entries[@]}" "${TMP_UV}/"
+      else
+        cp "${TMP_UV}/extracted"/* "${TMP_UV}/"
+      fi
+      shopt -u nullglob
       ;;
   esac
   cp "${TMP_UV}/${UV_BIN_NAME}" "${UV_BIN}"
