@@ -9,8 +9,8 @@
       "cwd": "./frontend"
     },
     "beforeBuildCommand": {
-      "script": "npm ci && npm run build",
-      "cwd": "./frontend"
+      "script": "../../scripts/prepare_tauri_backend_resource.sh && cd frontend && ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build",
+      "cwd": "."
     }
   },
   "app": {
@@ -27,8 +27,13 @@
     ]
   },
   "bundle": {
-    "active": false,
-    "targets": [],
+    "active": true,
+    "targets": [
+      "appimage"
+    ],
+    "resources": {
+      "packaged/backend": "backend"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",

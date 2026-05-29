@@ -91,6 +91,9 @@ pub struct AppState {
     /// Tauri commands. These sessions are process-local and intentionally
     /// not persisted across app restarts.
     pub local_game_sessions: Arc<Mutex<LocalGameSessionStore>>,
+    /// Tauri resource directory captured at setup time. Local Table backend
+    /// sessions use it to locate packaged backend resources outside dev mode.
+    pub resource_dir: Option<PathBuf>,
     /// Persistent game-history store. Written by the recorder task,
     /// read by `list_game_history` / `get_game_history_*` IPC commands.
     pub history_store: Arc<HistoryStore>,
@@ -144,8 +147,13 @@ impl AppState {
         history_store: Arc<HistoryStore>,
         history_platform: SharedPlatform,
         runtime: Option<PythonRuntime>,
+        resource_dir: Option<PathBuf>,
     ) -> Self {
         let local_game_config = config.local_game.clone();
+        let mut backend_session_config = BackendLocalSessionConfig::from(local_game_config);
+        backend_session_config.resource_dir = resource_dir.clone();
+        backend_session_config.uv_path = runtime.as_ref().map(|rt| rt.uv().to_path_buf());
+        backend_session_config.python_path = runtime.as_ref().map(|rt| rt.python().to_path_buf());
         Self {
             config: Arc::new(RwLock::new(config)),
             config_path: Arc::new(config_path),
@@ -164,9 +172,10 @@ impl AppState {
             local_game_sessions: Arc::new(Mutex::new(
                 LocalGameSessionStore::with_artifact_root_and_backend_loader(
                     resolve_dir(Path::new("./history")).join("local-artifacts"),
-                    BackendLocalSessionConfig::from(local_game_config),
+                    backend_session_config,
                 ),
             )),
+            resource_dir,
             history_store,
             history_platform,
             runtime,

@@ -28,6 +28,7 @@ mjai_bot/*/settings.toml
 
 # Tauri
 gen/
+packaged/
 
 # Bundled python + uv binaries fetched by scripts/fetch-runtime.sh.
 runtime/*

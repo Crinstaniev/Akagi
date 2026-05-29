@@ -1,7 +1,8 @@
+use super::backend_resource::{find_repo_root_from, locate_backend_resource};
 use crate::schema::local_game::{LocalGameView, LocalReviewSummary};
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 const FORBIDDEN_OUTPUT_KEYS: [&str; 6] = [
@@ -14,14 +15,12 @@ const FORBIDDEN_OUTPUT_KEYS: [&str; 6] = [
 ];
 
 pub fn load_backend_initial_view(seed: u64) -> Result<LocalGameView, String> {
-    let repo_root = find_repo_root().ok_or_else(|| {
-        "could not locate repository root with backend/pyproject.toml".to_string()
-    })?;
-    let output = Command::new("uv")
+    let backend = locate_backend_resource(None)?;
+    let output = Command::new(&backend.uv_path)
+        .arg("run")
+        .arg("--project")
+        .arg(&backend.backend_project)
         .args([
-            "run",
-            "--project",
-            "backend",
             "riichi-ai-trainer",
             "local-view",
             "--game-mode",
@@ -29,7 +28,7 @@ pub fn load_backend_initial_view(seed: u64) -> Result<LocalGameView, String> {
             "--seed",
             &seed.to_string(),
         ])
-        .current_dir(&repo_root)
+        .current_dir(&backend.working_dir)
         .output()
         .map_err(|error| format!("failed to run backend local-view: {error}"))?;
 
@@ -136,19 +135,9 @@ fn collect_keys(value: &Value, keys: &mut BTreeSet<String>) {
 }
 
 pub fn find_repo_root() -> Option<PathBuf> {
-    let mut current = std::env::current_dir().ok()?;
-    loop {
-        if is_repo_root(&current) {
-            return Some(current);
-        }
-        if !current.pop() {
-            return None;
-        }
-    }
-}
-
-fn is_repo_root(path: &Path) -> bool {
-    path.join("backend").join("pyproject.toml").exists()
+    std::env::current_dir()
+        .ok()
+        .and_then(|current| find_repo_root_from(&current))
 }
 
 impl Default for LocalReviewSummary {
@@ -173,7 +162,18 @@ impl Default for LocalReviewSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_game::backend_resource::{
+        locate_backend_resource_from, BackendResourceSource,
+    };
     use crate::schema::LocalArtifactStatus;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    fn create_backend_project(root: &Path) {
+        let backend = root.join("backend");
+        std::fs::create_dir_all(backend.join("src").join("riichi_ai_trainer")).unwrap();
+        std::fs::write(backend.join("pyproject.toml"), "[project]\nname = 'test'\n").unwrap();
+    }
 
     fn backend_view_json() -> Vec<u8> {
         r#"{
@@ -234,5 +234,30 @@ mod tests {
         let error = parse_backend_initial_view(&bytes).unwrap_err();
 
         assert!(error.contains("hidden-information"));
+    }
+
+    #[test]
+    fn backend_resource_locator_finds_packaged_backend_from_non_repo_cwd() {
+        let cwd = TempDir::new().unwrap();
+        let resource_dir = TempDir::new().unwrap();
+        create_backend_project(resource_dir.path());
+
+        let status = locate_backend_resource_from(Some(resource_dir.path()), cwd.path()).unwrap();
+
+        assert_eq!(status.source, BackendResourceSource::BundledResource);
+        assert_eq!(status.backend_project, resource_dir.path().join("backend"));
+    }
+
+    #[test]
+    fn backend_resource_locator_falls_back_to_repo_root_for_dev_mode() {
+        let repo = TempDir::new().unwrap();
+        create_backend_project(repo.path());
+        let cwd = repo.path().join("app").join("akagi");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let status = locate_backend_resource_from(None, &cwd).unwrap();
+
+        assert_eq!(status.source, BackendResourceSource::RepoRoot);
+        assert_eq!(status.backend_project, repo.path().join("backend"));
     }
 }

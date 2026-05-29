@@ -1,10 +1,12 @@
-use super::backend_view::{find_repo_root, parse_backend_view_value, reject_forbidden_output_keys};
+use super::backend_resource::{locate_backend_resource, BackendResourceStatus};
+use super::backend_view::{parse_backend_view_value, reject_forbidden_output_keys};
 use crate::schema::{LocalGameView, LocalReviewKeyChoice, LocalReviewSummary};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::env;
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 const GAME_MODE: &str = "4p-red-single";
@@ -19,6 +21,9 @@ pub struct BackendLocalSessionConfig {
     pub ai_worker_timeout_ms: Option<u32>,
     pub coach_worker_cmd: Option<String>,
     pub coach_worker_timeout_ms: Option<u32>,
+    pub resource_dir: Option<PathBuf>,
+    pub uv_path: Option<PathBuf>,
+    pub python_path: Option<PathBuf>,
 }
 
 impl From<crate::config::LocalGameConfig> for BackendLocalSessionConfig {
@@ -28,6 +33,9 @@ impl From<crate::config::LocalGameConfig> for BackendLocalSessionConfig {
             ai_worker_timeout_ms: config.ai_worker_timeout_ms,
             coach_worker_cmd: Some(config.coach_worker_cmd),
             coach_worker_timeout_ms: config.coach_worker_timeout_ms,
+            resource_dir: None,
+            uv_path: None,
+            python_path: None,
         }
     }
 }
@@ -368,6 +376,7 @@ struct ProcessBackendSessionTransport {
 }
 
 fn backend_local_session_args(
+    backend_project: impl AsRef<Path>,
     ai_worker_cmd: Option<&str>,
     ai_worker_timeout_ms: Option<&str>,
     coach_worker_cmd: Option<&str>,
@@ -376,7 +385,7 @@ fn backend_local_session_args(
     let mut args = vec![
         "run".to_string(),
         "--project".to_string(),
-        "backend".to_string(),
+        backend_project.as_ref().display().to_string(),
         "riichi-ai-trainer".to_string(),
         "local-session".to_string(),
     ];
@@ -412,6 +421,7 @@ fn backend_local_session_args(
 }
 
 fn backend_local_session_args_from_config(
+    backend_project: impl AsRef<Path>,
     config: &BackendLocalSessionConfig,
     env_ai_worker_cmd: Option<&str>,
     env_ai_worker_timeout_ms: Option<&str>,
@@ -437,6 +447,7 @@ fn backend_local_session_args_from_config(
         .filter(|timeout_ms| *timeout_ms > 0)
         .map(|timeout_ms| timeout_ms.to_string());
     backend_local_session_args(
+        backend_project,
         config_cmd.or(env_ai_worker_cmd).map(str::trim),
         config_timeout.as_deref().or(env_ai_worker_timeout_ms),
         config_coach_cmd.or(env_coach_worker_cmd).map(str::trim),
@@ -446,12 +457,16 @@ fn backend_local_session_args_from_config(
     )
 }
 
-fn backend_local_session_args_from_env(config: &BackendLocalSessionConfig) -> Vec<String> {
+fn backend_local_session_args_from_env(
+    backend_project: impl AsRef<Path>,
+    config: &BackendLocalSessionConfig,
+) -> Vec<String> {
     let ai_worker_cmd = env::var(AI_WORKER_CMD_ENV).ok();
     let ai_worker_timeout_ms = env::var(AI_WORKER_TIMEOUT_MS_ENV).ok();
     let coach_worker_cmd = env::var(COACH_WORKER_CMD_ENV).ok();
     let coach_worker_timeout_ms = env::var(COACH_WORKER_TIMEOUT_MS_ENV).ok();
     backend_local_session_args_from_config(
+        backend_project,
         config,
         ai_worker_cmd.as_deref(),
         ai_worker_timeout_ms.as_deref(),
@@ -462,19 +477,45 @@ fn backend_local_session_args_from_env(config: &BackendLocalSessionConfig) -> Ve
 
 impl ProcessBackendSessionTransport {
     fn spawn(config: BackendLocalSessionConfig) -> Result<Self, String> {
-        Self::spawn_with_args(backend_local_session_args_from_env(&config))
+        let backend = locate_backend_resource(config.resource_dir.as_deref())?;
+        Self::spawn_with_backend(backend, config)
     }
 
-    fn spawn_with_args(args: Vec<String>) -> Result<Self, String> {
-        let repo_root = find_repo_root().ok_or_else(|| {
-            "could not locate repository root with backend/pyproject.toml".to_string()
-        })?;
-        let mut child = Command::new("uv")
+    fn spawn_with_backend(
+        mut backend: BackendResourceStatus,
+        config: BackendLocalSessionConfig,
+    ) -> Result<Self, String> {
+        if let Some(uv_path) = config.uv_path.clone() {
+            backend.uv_path = uv_path;
+        }
+        Self::spawn_with_args(
+            backend.uv_path.clone(),
+            backend_local_session_args_from_env(&backend.backend_project, &config),
+            backend.working_dir,
+            config.python_path.as_deref(),
+        )
+    }
+
+    fn spawn_with_args(
+        uv_path: impl AsRef<Path>,
+        args: Vec<String>,
+        working_dir: impl AsRef<Path>,
+        python_path: Option<&Path>,
+    ) -> Result<Self, String> {
+        let mut command = Command::new(uv_path.as_ref());
+        command
             .args(&args)
-            .current_dir(repo_root)
+            .current_dir(working_dir.as_ref())
+            .env("UV_PROJECT_ENVIRONMENT", backend_venv_dir())
+            .env_remove("PYTHONHOME")
+            .env_remove("PYTHONPATH")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some(python_path) = python_path {
+            command.env("UV_PYTHON", python_path);
+        }
+        let mut child = command
             .spawn()
             .map_err(|error| format!("failed to start backend local-session: {error}"))?;
         let stdin = child
@@ -491,6 +532,13 @@ impl ProcessBackendSessionTransport {
             stdout: BufReader::new(stdout),
         })
     }
+}
+
+fn backend_venv_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("akagi")
+        .join("backend-venv")
 }
 
 impl BackendSessionTransport for ProcessBackendSessionTransport {
@@ -593,6 +641,7 @@ mod tests {
     #[test]
     fn backend_local_session_args_include_worker_config_when_present() {
         let args = backend_local_session_args(
+            "backend",
             Some("python backend/tests/fixtures/bots/normal_bot.py"),
             Some("30000"),
             None,
@@ -617,7 +666,7 @@ mod tests {
 
     #[test]
     fn backend_local_session_args_skip_empty_worker_config() {
-        let args = backend_local_session_args(Some(""), Some(""), Some(""), Some(""));
+        let args = backend_local_session_args("backend", Some(""), Some(""), Some(""), Some(""));
 
         assert_eq!(
             args,
@@ -632,15 +681,34 @@ mod tests {
     }
 
     #[test]
+    fn backend_local_session_args_use_located_backend_project_path() {
+        let args =
+            backend_local_session_args("/tmp/Akagi/resources/backend", None, None, None, None);
+
+        assert_eq!(
+            args,
+            vec![
+                "run",
+                "--project",
+                "/tmp/Akagi/resources/backend",
+                "riichi-ai-trainer",
+                "local-session",
+            ]
+        );
+    }
+
+    #[test]
     fn backend_local_session_args_use_saved_worker_config() {
         let config = BackendLocalSessionConfig {
             ai_worker_cmd: Some("  uv run worker  ".into()),
             ai_worker_timeout_ms: Some(30000),
             coach_worker_cmd: None,
             coach_worker_timeout_ms: None,
+            ..BackendLocalSessionConfig::default()
         };
 
         let args = backend_local_session_args_from_config(
+            "backend",
             &config,
             Some("env worker"),
             Some("1000"),
@@ -671,9 +739,11 @@ mod tests {
             ai_worker_timeout_ms: None,
             coach_worker_cmd: None,
             coach_worker_timeout_ms: None,
+            ..BackendLocalSessionConfig::default()
         };
 
         let args = backend_local_session_args_from_config(
+            "backend",
             &config,
             Some("env worker"),
             Some("5000"),
@@ -704,9 +774,11 @@ mod tests {
             ai_worker_timeout_ms: None,
             coach_worker_cmd: Some("  uv run coach  ".into()),
             coach_worker_timeout_ms: Some(30000),
+            ..BackendLocalSessionConfig::default()
         };
 
         let args = backend_local_session_args_from_config(
+            "backend",
             &config,
             None,
             None,
@@ -737,9 +809,11 @@ mod tests {
             ai_worker_timeout_ms: None,
             coach_worker_cmd: Some("   ".into()),
             coach_worker_timeout_ms: None,
+            ..BackendLocalSessionConfig::default()
         };
 
         let args = backend_local_session_args_from_config(
+            "backend",
             &config,
             None,
             None,
@@ -828,8 +902,23 @@ mod tests {
     fn local_table_backend_process_smoke_reports_worker_metadata() {
         let worker_cmd =
             "uv run --project backend python backend/tests/fixtures/bots/normal_bot.py";
-        let args = backend_local_session_args(Some(worker_cmd), Some("5000"), None, None);
-        let transport = Box::new(ProcessBackendSessionTransport::spawn_with_args(args).unwrap());
+        let backend = locate_backend_resource(None).unwrap();
+        let args = backend_local_session_args(
+            &backend.backend_project,
+            Some(worker_cmd),
+            Some("5000"),
+            None,
+            None,
+        );
+        let transport = Box::new(
+            ProcessBackendSessionTransport::spawn_with_args(
+                backend.uv_path,
+                args,
+                backend.working_dir,
+                None,
+            )
+            .unwrap(),
+        );
 
         let session = BackendLocalSession::start_with_transport(1, transport).unwrap();
         let latest = session.latest_view().unwrap();

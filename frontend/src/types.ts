@@ -153,6 +153,22 @@ export type LocalMortalQualityResult = {
   }
 }
 
+export type LocalDesktopDiagnosticResult = {
+  backend: {
+    status: string
+    source: string | null
+    backendProject: string | null
+    uvPath: string | null
+    reasons: string[]
+  }
+  model: {
+    status: string
+    modelDir: string | null
+    fallbackAvailable: boolean
+    reason: string | null
+  }
+}
+
 export type AppConfig = {
   general: { language: string; first_run_completed: boolean }
   logging: { dir: string; level: string; all_level: string }

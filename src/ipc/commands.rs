@@ -18,6 +18,7 @@ use crate::ipc::capture_supervisor::{
     restart_capture as restart_capture_inner, spawn_capture_supervisor,
 };
 use crate::ipc::state::AppState;
+use crate::local_game::backend_resource::{locate_backend_resource, BackendResourceStatus};
 use crate::local_game::backend_session::BackendLocalSessionConfig;
 use crate::local_game::backend_view::find_repo_root;
 use crate::local_game::LocalGameSessionStore;
@@ -124,6 +125,38 @@ pub struct LocalMortalQualityResult {
     #[serde(default)]
     pub reasons: Vec<String>,
     pub summary: LocalMortalQualitySummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalDesktopBackendDiagnostic {
+    pub status: String,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub backend_project: Option<String>,
+    #[serde(default)]
+    pub uv_path: Option<String>,
+    #[serde(default)]
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalDesktopModelDiagnostic {
+    pub status: String,
+    #[serde(default)]
+    pub model_dir: Option<String>,
+    pub fallback_available: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalDesktopDiagnosticResult {
+    pub backend: LocalDesktopBackendDiagnostic,
+    pub model: LocalDesktopModelDiagnostic,
 }
 
 fn mortal_env_command_args(model_dir: &str) -> Vec<String> {
@@ -249,6 +282,57 @@ fn mortal_quality_output_to_result(
     parse_mortal_quality_result(stdout)
 }
 
+fn desktop_backend_diagnostic(
+    resource: Result<BackendResourceStatus, String>,
+) -> LocalDesktopBackendDiagnostic {
+    match resource {
+        Ok(status) => LocalDesktopBackendDiagnostic {
+            status: "ready".into(),
+            source: Some(format!("{:?}", status.source)),
+            backend_project: Some(status.backend_project.display().to_string()),
+            uv_path: Some(status.uv_path.display().to_string()),
+            reasons: status.reasons,
+        },
+        Err(error) => LocalDesktopBackendDiagnostic {
+            status: "unavailable".into(),
+            source: None,
+            backend_project: None,
+            uv_path: None,
+            reasons: vec![error],
+        },
+    }
+}
+
+fn desktop_model_diagnostic(model_dir: &str) -> LocalDesktopModelDiagnostic {
+    let model_dir = model_dir.trim();
+    if model_dir.is_empty() {
+        return LocalDesktopModelDiagnostic {
+            status: "not_configured".into(),
+            model_dir: None,
+            fallback_available: true,
+            reason: Some("Mortal model directory is not configured; baseline local training remains available.".into()),
+        };
+    }
+    let path = Path::new(model_dir);
+    if path.is_dir() {
+        LocalDesktopModelDiagnostic {
+            status: "ready".into(),
+            model_dir: Some(model_dir.into()),
+            fallback_available: true,
+            reason: None,
+        }
+    } else {
+        LocalDesktopModelDiagnostic {
+            status: "invalid".into(),
+            model_dir: Some(model_dir.into()),
+            fallback_available: true,
+            reason: Some(format!(
+                "Mortal model directory does not exist: {model_dir}"
+            )),
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn local_game_generate_mortal_command(
     model_dir: String,
@@ -365,6 +449,23 @@ pub async fn local_game_check_mortal_single_game_quality(
     )
 }
 
+#[tauri::command]
+pub async fn local_game_desktop_diagnostics(
+    state: State<'_, AppState>,
+) -> CmdResult<LocalDesktopDiagnosticResult> {
+    let cfg = state.config.read().await.local_game.clone();
+    let mut backend = locate_backend_resource(state.resource_dir.as_deref());
+    if let Ok(status) = &mut backend {
+        if let Some(runtime) = &state.runtime {
+            status.uv_path = runtime.uv().to_path_buf();
+        }
+    }
+    Ok(LocalDesktopDiagnosticResult {
+        backend: desktop_backend_diagnostic(backend),
+        model: desktop_model_diagnostic(&cfg.mortal_model_dir),
+    })
+}
+
 async fn create_local_game_session(
     store: &Arc<Mutex<LocalGameSessionStore>>,
     config: BackendLocalSessionConfig,
@@ -393,11 +494,11 @@ async fn submit_local_game_action(
 #[tauri::command]
 pub async fn local_game_new(state: State<'_, AppState>) -> CmdResult<LocalGameSessionHandle> {
     let config = state.config.read().await.local_game.clone();
-    create_local_game_session(
-        &state.local_game_sessions,
-        BackendLocalSessionConfig::from(config),
-    )
-    .await
+    let mut config = BackendLocalSessionConfig::from(config);
+    config.resource_dir = state.resource_dir.clone();
+    config.uv_path = state.runtime.as_ref().map(|rt| rt.uv().to_path_buf());
+    config.python_path = state.runtime.as_ref().map(|rt| rt.python().to_path_buf());
+    create_local_game_session(&state.local_game_sessions, config).await
 }
 
 #[tauri::command]
@@ -1564,6 +1665,7 @@ macro_rules! ipc_handlers {
             $crate::ipc::commands::local_game_generate_mortal_command,
             $crate::ipc::commands::local_game_check_mortal_readiness,
             $crate::ipc::commands::local_game_check_mortal_single_game_quality,
+            $crate::ipc::commands::local_game_desktop_diagnostics,
             $crate::ipc::commands::get_config,
             $crate::ipc::commands::update_config,
             $crate::ipc::commands::list_bots,
@@ -1858,6 +1960,39 @@ mod tests {
         assert!(args.contains(&"--ai-worker-cmd".to_string()));
         assert!(args.contains(&"--games".to_string()));
         assert!(args.contains(&"--json".to_string()));
+    }
+
+    #[test]
+    fn desktop_model_diagnostic_allows_fallback_when_unconfigured() {
+        let diagnostic = desktop_model_diagnostic("  ");
+
+        assert_eq!(diagnostic.status, "not_configured");
+        assert!(diagnostic.fallback_available);
+        assert!(diagnostic
+            .reason
+            .unwrap()
+            .contains("baseline local training"));
+    }
+
+    #[test]
+    fn desktop_model_diagnostic_reports_invalid_model_dir_without_blocking_fallback() {
+        let diagnostic = desktop_model_diagnostic("/tmp/akagi-missing-model-dir");
+
+        assert_eq!(diagnostic.status, "invalid");
+        assert!(diagnostic.fallback_available);
+        assert!(diagnostic
+            .reason
+            .unwrap()
+            .contains("Mortal model directory does not exist"));
+    }
+
+    #[test]
+    fn desktop_backend_diagnostic_reports_unavailable_reason() {
+        let diagnostic = desktop_backend_diagnostic(Err("missing backend".into()));
+
+        assert_eq!(diagnostic.status, "unavailable");
+        assert_eq!(diagnostic.source, None);
+        assert_eq!(diagnostic.reasons, vec!["missing backend"]);
     }
 
     fn command_backend_session_starter(

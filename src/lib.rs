@@ -170,6 +170,7 @@ pub fn run() {
                     history_store.clone(),
                     history_platform.clone(),
                     runtime.clone(),
+                    resource_dir.clone(),
                 );
 
                 ipc::install(app.handle(), state.clone())?;

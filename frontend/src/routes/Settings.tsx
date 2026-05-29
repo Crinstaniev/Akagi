@@ -41,6 +41,7 @@ import type {
   AppConfig,
   CaptureMode,
   DetectedBrowser,
+  LocalDesktopDiagnosticResult,
   LocalMortalCommandResult,
   LocalMortalQualityResult,
   LocalMortalReadinessResult,
@@ -440,6 +441,24 @@ function LocalTableCard({
   const [checkingQuality, setCheckingQuality] = useState(false)
   const [qualityResult, setQualityResult] = useState<LocalMortalQualityResult | null>(null)
   const [qualityError, setQualityError] = useState<string | null>(null)
+  const [desktopDiagnostic, setDesktopDiagnostic] =
+    useState<LocalDesktopDiagnosticResult | null>(null)
+  const [desktopDiagnosticError, setDesktopDiagnosticError] = useState<string | null>(null)
+  const [checkingDesktopDiagnostic, setCheckingDesktopDiagnostic] = useState(false)
+
+  async function checkDesktopDiagnostic() {
+    setDesktopDiagnostic(null)
+    setDesktopDiagnosticError(null)
+    setCheckingDesktopDiagnostic(true)
+    try {
+      const result = await invoke<LocalDesktopDiagnosticResult>('local_game_desktop_diagnostics')
+      setDesktopDiagnostic(result)
+    } catch (error) {
+      setDesktopDiagnosticError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCheckingDesktopDiagnostic(false)
+    }
+  }
 
   async function generateMortalCommand() {
     const modelDir = localGame.mortal_model_dir.trim()
@@ -516,6 +535,80 @@ function LocalTableCard({
         <CardTitle>{t('settings.local_table.title')}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">{t('settings.local_table.desktop_diagnostic_title')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.local_table.desktop_diagnostic_hint')}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={checkDesktopDiagnostic}
+              disabled={checkingDesktopDiagnostic}
+            >
+              {checkingDesktopDiagnostic
+                ? t('settings.local_table.checking_desktop_diagnostic')
+                : t('settings.local_table.check_desktop_diagnostic')}
+            </Button>
+          </div>
+          {(desktopDiagnosticError || desktopDiagnostic) && (
+            <div className="mt-3 grid gap-2">
+              {desktopDiagnosticError ? (
+                <p className="text-destructive">{desktopDiagnosticError}</p>
+              ) : desktopDiagnostic ? (
+                <>
+                  <p
+                    className={
+                      desktopDiagnostic.backend.status === 'ready'
+                        ? 'text-emerald-700'
+                        : 'text-amber-700'
+                    }
+                  >
+                    {t('settings.local_table.desktop_backend_status', {
+                      status: desktopDiagnostic.backend.status,
+                      source: desktopDiagnostic.backend.source ?? '-',
+                    })}
+                  </p>
+                  {desktopDiagnostic.backend.backendProject && (
+                    <p className="break-all text-xs text-muted-foreground">
+                      {desktopDiagnostic.backend.backendProject}
+                    </p>
+                  )}
+                  <p
+                    className={
+                      desktopDiagnostic.model.status === 'ready'
+                        ? 'text-emerald-700'
+                        : 'text-amber-700'
+                    }
+                  >
+                    {t('settings.local_table.desktop_model_status', {
+                      status: desktopDiagnostic.model.status,
+                    })}
+                    {' · '}
+                    {desktopDiagnostic.model.fallbackAvailable
+                      ? t('settings.local_table.desktop_model_fallback_available')
+                      : t('settings.local_table.desktop_model_fallback_unavailable')}
+                  </p>
+                  {desktopDiagnostic.model.reason && (
+                    <p className="text-xs text-muted-foreground">
+                      {desktopDiagnostic.model.reason}
+                    </p>
+                  )}
+                  {desktopDiagnostic.backend.reasons.length > 0 && (
+                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                      {desktopDiagnostic.backend.reasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
+        </div>
         <Field
           label={t('settings.local_table.mortal_model_dir')}
           hint={t('settings.local_table.mortal_model_dir_hint')}

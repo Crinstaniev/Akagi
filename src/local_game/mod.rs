@@ -1,4 +1,5 @@
 pub mod artifact;
+pub mod backend_resource;
 pub mod backend_session;
 pub mod backend_view;
 pub mod engine;
