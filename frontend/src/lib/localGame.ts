@@ -82,6 +82,7 @@ export type LocalReviewSummary = {
   source: string
   totalDecisions: number
   top1Matches: number
+  top3Matches: number
   mismatchCount: number
   attentionCount: number
   fallbackCount: number
@@ -235,6 +236,7 @@ const DEV_FALLBACK_VIEW: LocalGameView = {
     source: 'frontend_dev_fallback',
     totalDecisions: 0,
     top1Matches: 0,
+    top3Matches: 0,
     mismatchCount: 0,
     attentionCount: 0,
     fallbackCount: 0,

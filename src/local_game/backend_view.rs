@@ -158,6 +158,7 @@ impl Default for LocalReviewSummary {
             source: "unavailable".into(),
             total_decisions: 0,
             top1_matches: 0,
+            top3_matches: 0,
             mismatch_count: 0,
             attention_count: 0,
             fallback_count: 0,

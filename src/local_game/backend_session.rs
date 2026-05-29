@@ -260,6 +260,8 @@ struct BackendReviewReport {
 struct BackendReviewSummaryCounts {
     decision_count: u32,
     matched_recommendation_count: u32,
+    #[serde(default)]
+    top3_match_count: u32,
     mismatch_count: u32,
     #[serde(default)]
     attention_count: u32,
@@ -310,6 +312,7 @@ fn parse_backend_review_report(raw: Value) -> Result<LocalReviewSummary, String>
         source: "backend_review_report".into(),
         total_decisions: report.summary.decision_count,
         top1_matches: report.summary.matched_recommendation_count,
+        top3_matches: report.summary.top3_match_count,
         mismatch_count: report.summary.mismatch_count,
         attention_count: if report.summary.attention_count > 0 {
             report.summary.attention_count
@@ -946,6 +949,7 @@ mod tests {
                     "summary": {
                         "decision_count": 3,
                         "matched_recommendation_count": 1,
+                        "top3_match_count": 2,
                         "mismatch_count": 1,
                         "attention_count": 3,
                         "fallback_count": 1,
@@ -980,6 +984,7 @@ mod tests {
         assert_eq!(terminal.review_summary.source, "backend_review_report");
         assert_eq!(terminal.review_summary.total_decisions, 3);
         assert_eq!(terminal.review_summary.top1_matches, 1);
+        assert_eq!(terminal.review_summary.top3_matches, 2);
         assert_eq!(terminal.review_summary.mismatch_count, 1);
         assert_eq!(terminal.review_summary.attention_count, 3);
         assert_eq!(terminal.review_summary.fallback_count, 1);

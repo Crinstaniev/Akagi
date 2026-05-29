@@ -63,6 +63,7 @@
     "review_summary": "最小复盘",
     "review_total": "决策",
     "review_top1": "命中",
+    "review_top3": "Top-3",
     "review_focus": "关注",
     "review_fallback": "Fallback",
     "review_unavailable_count": "不可用",

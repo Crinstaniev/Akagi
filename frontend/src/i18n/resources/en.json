@@ -63,6 +63,7 @@
     "review_summary": "Review summary",
     "review_total": "Decisions",
     "review_top1": "Top-1",
+    "review_top3": "Top-3",
     "review_focus": "Focus",
     "review_fallback": "Fallback",
     "review_unavailable_count": "Unavailable",

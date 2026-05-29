@@ -179,6 +179,8 @@ pub struct LocalReviewSummary {
     pub source: String,
     pub total_decisions: u32,
     pub top1_matches: u32,
+    #[serde(default)]
+    pub top3_matches: u32,
     pub mismatch_count: u32,
     #[serde(default)]
     pub attention_count: u32,

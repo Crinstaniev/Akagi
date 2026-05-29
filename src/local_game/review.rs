@@ -24,6 +24,7 @@ pub fn build_local_review_summary(decision_points: &[LocalDecisionPoint]) -> Loc
         source: LOCAL_REVIEW_SUMMARY_SOURCE.into(),
         total_decisions: decision_points.len() as u32,
         top1_matches,
+        top3_matches: top1_matches,
         mismatch_count: key_choices.len() as u32,
         attention_count: key_choices.len() as u32,
         fallback_count: key_choices
@@ -90,6 +91,7 @@ mod tests {
 
         assert_eq!(summary.total_decisions, 1);
         assert_eq!(summary.top1_matches, 1);
+        assert_eq!(summary.top3_matches, 1);
         assert_eq!(summary.mismatch_count, 0);
         assert!(summary.key_choices.is_empty());
     }
@@ -104,6 +106,7 @@ mod tests {
 
         assert_eq!(summary.total_decisions, 1);
         assert_eq!(summary.top1_matches, 0);
+        assert_eq!(summary.top3_matches, 0);
         assert_eq!(summary.mismatch_count, 1);
         assert_eq!(summary.key_choices[0].category, "baseline_mismatch");
         assert_eq!(

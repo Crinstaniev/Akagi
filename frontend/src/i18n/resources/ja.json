@@ -63,6 +63,7 @@
     "review_summary": "最小レビュー",
     "review_total": "判断",
     "review_top1": "一致",
+    "review_top3": "Top-3",
     "review_focus": "注目",
     "review_fallback": "Fallback",
     "review_unavailable_count": "利用不可",

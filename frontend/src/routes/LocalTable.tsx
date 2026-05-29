@@ -446,6 +446,7 @@ function ReviewSummaryPanel({ view }: { view: LocalGameView }) {
         <div className="grid grid-cols-3 gap-2">
           <Stat label={t('local_table.review_total')} value={String(summary.totalDecisions)} />
           <Stat label={t('local_table.review_top1')} value={String(summary.top1Matches)} />
+          <Stat label={t('local_table.review_top3')} value={String(summary.top3Matches)} />
           <Stat label={t('local_table.review_focus')} value={String(summary.attentionCount)} />
           <Stat label={t('local_table.review_fallback')} value={String(summary.fallbackCount)} />
           <Stat
